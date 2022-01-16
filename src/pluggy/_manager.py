@@ -7,16 +7,16 @@ from pluggy import PluginValidationError
 from pluggy._entrypoints import DistFacade
 
 from . import _tracing
-from ._callers import _Result, _multicall, HookImpls, HookArgs, HookExecCallable
+from ._result import _Result
+from ._callers import _multicall, HookImpls, HookArgs, HookExecCallable
 from ._hooks import (
     HookImpl,
     _HookRelay,
     _HookCaller,
-    normalize_hookimpl_opts,
 )
-from pluggy._typing import HookSpecMarkerData, HookImplMarkerSpec
+from pluggy._typing import HookSpecMarkerData, HookImplMarkerData
 from ._result import HookFunction
-from typing import List, Dict, Callable, cast, Optional, Tuple, Set
+from typing import List, Dict, Callable, cast, Optional, Tuple, Set, Union
 
 if sys.version_info >= (3, 8):
     from importlib import metadata as importlib_metadata
@@ -98,10 +98,11 @@ class PluginManager:
         for attr_name in dir(plugin):
             hookimpl_opts = self.parse_hookimpl_opts(plugin, attr_name)
             if hookimpl_opts is not None:
-                normalize_hookimpl_opts(hookimpl_opts)
+                hookimpl_spec = HookImplMarkerData.from_parse(hookimpl_opts)
                 method: HookFunction = getattr(plugin, attr_name)
-                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_opts)
-                hook_name: str = hookimpl_opts["specname"] or attr_name
+                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_spec)
+
+                hook_name: str = hookimpl_spec.specname or attr_name
                 hook: Optional[_HookCaller] = cast(
                     Optional[_HookCaller], getattr(self.hook, hook_name, None)
                 )
@@ -117,24 +118,23 @@ class PluginManager:
 
     def parse_hookimpl_opts(
         self, plugin: object, name: str
-    ) -> Optional[HookImplMarkerSpec]:
-        method = cast(object, getattr(plugin, name))
+    ) -> Optional[Union[HookImplMarkerData, Dict[str, Union[bool, str, None]]]]:
+        method: object = getattr(plugin, name)
         if not inspect.isroutine(method):
             return None
         try:
-            res = cast(
-                Optional[HookImplMarkerSpec],
-                getattr(method, self.project_name + "_impl", None),
+            res: Optional[HookImplMarkerData] = getattr(
+                method, self.project_name + "_impl", None
             )
         except Exception:
-            res = HookImplMarkerSpec(
+            res = HookImplMarkerData(
                 hookwrapper=False,
                 optionalhook=False,
                 tryfirst=False,
                 trylast=False,
                 specname=None,
             )
-        if res is not None and not isinstance(res, dict):
+        if res is not None and not isinstance(res, HookImplMarkerData):
             # false positive
             return None
         return res
@@ -175,13 +175,14 @@ class PluginManager:
         for name in dir(module_or_class):
             spec_opts = self.parse_hookspec_opts(module_or_class, name)
             if spec_opts is not None:
-                hc = cast(Optional[_HookCaller], getattr(self.hook, name, None))
+                spec: HookSpecMarkerData = HookSpecMarkerData.from_parse(spec_opts)
+                hc: Optional[_HookCaller] = getattr(self.hook, name, None)
                 if hc is None:
-                    hc = _HookCaller(name, self._hookexec, module_or_class, spec_opts)
+                    hc = _HookCaller(name, self._hookexec, module_or_class, spec)
                     setattr(self.hook, name, hc)
                 else:
                     # plugins registered this hook without knowing the spec
-                    hc.set_specification(module_or_class, spec_opts)
+                    hc.set_specification(module_or_class, spec)
                     for hookfunction in hc.get_hookimpls():
                         self._verify_hook(hc, hookfunction)
                 names.append(name)
@@ -193,12 +194,14 @@ class PluginManager:
 
     def parse_hookspec_opts(
         self, module_or_class: object, name: str
-    ) -> Optional[HookSpecMarkerData]:
-        method: object = cast(object, getattr(module_or_class, name))
-        return cast(
-            Optional[HookSpecMarkerData],
-            getattr(method, self.project_name + "_spec", None),
+    ) -> Optional[
+        Union[HookSpecMarkerData, dict[str, Union[bool, str, Optional[Warning], None]]]
+    ]:
+        method: object = getattr(module_or_class, name)
+        marker: Optional[HookSpecMarkerData] = getattr(
+            method, self.project_name + "_spec", None
         )
+        return marker
 
     def get_plugins(self) -> Set[object]:
         """return the set of registered plugins."""

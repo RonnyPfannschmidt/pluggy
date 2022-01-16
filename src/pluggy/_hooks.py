@@ -1,6 +1,7 @@
 """
 Internal hook annotation, representation and calling machinery.
 """
+import inspect
 import warnings
 from typing import (
     Callable,
@@ -13,16 +14,13 @@ from typing import (
     TYPE_CHECKING,
     cast,
 )
-from types import FunctionType
+from types import FunctionType, GeneratorType
 
-from pluggy._typing import HookSpecMarkerData, HookImplMarkerSpec
+from ._typing import HookSpecMarkerData, HookImplMarkerData
 from typing_extensions import Literal
 from ._inspect import varnames
 from ._result import HookFunction, SomeResult
-from ._callers import HookArgs, HookResultCallback
-
-if TYPE_CHECKING:
-    from ._manager import HookExecCallable
+from ._callers import HookArgs, HookResultCallback, HookExecCallable
 
 
 class HookspecMarker:
@@ -85,13 +83,10 @@ class HookspecMarker:
             setattr(
                 func,
                 self.project_name + "_spec",
-                cast(
-                    HookSpecMarkerData,
-                    dict(
-                        firstresult=firstresult,
-                        historic=historic,
-                        warn_on_impl=warn_on_impl,
-                    ),
+                HookSpecMarkerData(
+                    firstresult=firstresult,
+                    historic=historic,
+                    warn_on_impl=warn_on_impl,
                 ),
             )
             return func
@@ -155,7 +150,7 @@ class HookimplMarker:
             setattr(
                 func,
                 self.project_name + "_impl",
-                HookImplMarkerSpec(
+                HookImplMarkerData(
                     hookwrapper=hookwrapper,
                     optionalhook=optionalhook,
                     tryfirst=tryfirst,
@@ -171,17 +166,7 @@ class HookimplMarker:
             return setattr_hookimpl_opts(function)
 
 
-def normalize_hookimpl_opts(
-    opts: Union[HookImplMarkerSpec, Dict[str, Union[bool, str, None]]]
-) -> None:
-    opts.setdefault("tryfirst", False)
-    opts.setdefault("trylast", False)
-    opts.setdefault("hookwrapper", False)
-    opts.setdefault("optionalhook", False)
-    opts.setdefault("specname", None)
-
-
-class _HookRelay(dict):
+class _HookRelay(Dict[str, "_HookCaller"]):
     """hook holder object for performing 1:N hook calls where N is the number
     of registered plugins.
 
@@ -237,7 +222,7 @@ class _HookCaller:
     ) -> None:
         assert self.spec is None
         self.spec = HookSpec(specmodule_or_class, self.name, spec_opts)
-        if spec_opts.get("historic"):
+        if spec_opts.historic:
             self._call_history = []
 
     def is_historic(self) -> bool:
@@ -299,7 +284,7 @@ class _HookCaller:
                     )
                     break
 
-            firstresult = cast(bool, self.spec.opts.get("firstresult"))
+            firstresult = self.spec.opts.firstresult
         else:
             firstresult = False
 
@@ -335,7 +320,7 @@ class _HookCaller:
         methods using the specified ``kwargs`` as call parameters."""
         old = list(self._nonwrappers), list(self._wrappers)
         for method in methods:
-            opts = HookImplMarkerSpec(
+            opts = HookImplMarkerData(
                 hookwrapper=False,
                 trylast=False,
                 tryfirst=False,
@@ -363,29 +348,33 @@ class HookImpl:
     function: HookFunction
     argnames: Tuple[str, ...]
     kwargnames: Tuple[str, ...]
-    plugin: object
-    plugin_name: str
     hookwrapper: bool
     tryfirst: bool
     trylast: bool
     optionalhook: bool
+    plugin: object
+    plugin_name: str
 
     def __init__(
         self,
         plugin: object,
         plugin_name: str,
         function: HookFunction,
-        hook_impl_opts: HookImplMarkerSpec,
+        hook_impl_opts: HookImplMarkerData,
     ):
         self.function = function  # type: ignore
         self.argnames, self.kwargnames = varnames(function)
         self.plugin = plugin
         self.opts = hook_impl_opts
         self.plugin_name = plugin_name
-        self.tryfirst = hook_impl_opts["tryfirst"]
-        self.trylast = hook_impl_opts["trylast"]
-        self.hookwrapper = hook_impl_opts["hookwrapper"]
-        self.optionalhook = hook_impl_opts["optionalhook"]
+        self.tryfirst = hook_impl_opts.tryfirst
+        self.trylast = hook_impl_opts.trylast
+        self.hookwrapper = hook_impl_opts.hookwrapper
+        self.optionalhook = hook_impl_opts.optionalhook
+        if self.hookwrapper and not inspect.isgeneratorfunction(function):
+            raise TypeError(function, "required was a generator")
+        elif not self.hookwrapper and inspect.isgeneratorfunction(function):
+            raise TypeError(function, "required was a non-generator")
 
     def __repr__(self) -> str:
         return f"<HookImpl plugin_name={self.plugin_name!r}, plugin={self.plugin!r}>"
@@ -406,4 +395,4 @@ class HookSpec:
         self.name = name
         self.argnames, self.kwargnames = varnames(cast(FunctionType, function))
         self.opts = opts
-        self.warn_on_impl = opts.get("warn_on_impl")
+        self.warn_on_impl = opts.warn_on_impl
