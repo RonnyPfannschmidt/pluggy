@@ -1,3 +1,5 @@
+from typing import NoReturn
+
 import pytest
 
 from pluggy import HookimplMarker
@@ -79,7 +81,7 @@ def test_warn_when_deprecated_specified(recwarn) -> None:
 
     class Plugin:
         @hookimpl
-        def foo(self):
+        def foo(self) -> None:
             pass
 
     pm = PluginManager(hookspec.project_name)
@@ -132,7 +134,7 @@ def test_plugin_getattr_raises_errors() -> None:
     """
 
     class DontTouchMe:
-        def __getattr__(self, x):
+        def __getattr__(self, x: str) -> NoReturn:
             raise Exception("can't touch me")
 
     class Module:
@@ -179,7 +181,7 @@ def test_not_all_arguments_are_provided_issues_a_warning(pm: PluginManager) -> N
 def test_repr() -> None:
     class Plugin:
         @hookimpl
-        def myhook(self):
+        def myhook(self) -> None:
             raise NotImplementedError()
 
     pm = PluginManager(hookspec.project_name)

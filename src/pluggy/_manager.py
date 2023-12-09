@@ -70,11 +70,11 @@ class DistFacade:
         name: str = self.metadata["name"]
         return name
 
-    def __getattr__(self, attr: str, default=None):
+    def __getattr__(self, attr: str, default: object | None = None) -> Any:
         return getattr(self._dist, attr, default)
 
     def __dir__(self) -> list[str]:
-        return sorted(dir(self._dist) + ["_dist", "project_name"])
+        return sorted([*dir(self._dist), "_dist", "project_name"])
 
 
 class PluginManager:
@@ -192,7 +192,7 @@ class PluginManager:
             res = {}  # type: ignore[assignment]
         if res is not None and not isinstance(res, dict):
             # false positive
-            res = None  # type:ignore[unreachable]
+            res = None
         return res
 
     def unregister(

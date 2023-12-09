@@ -1,14 +1,29 @@
 """
 Benchmarking and performance tests.
 """
+import types
+from typing import Generator
+from typing import Protocol
+
 
 import pytest
 
 from pluggy import HookimplMarker
+from pluggy import HookRelay
 from pluggy import HookspecMarker
 from pluggy import PluginManager
 from pluggy._callers import _multicall
 from pluggy._hooks import HookImpl
+
+
+class BenchmarkProtocol(Protocol):
+    "stand in for missing types in pytest-benchmark"
+
+    def __call__(self, object, *k: object, **kw: object) -> None:
+        pass
+
+    def pedantic(self, object, *k: object, **kw: object) -> None:
+        pass
 
 
 hookspec = HookspecMarker("example")
@@ -21,22 +36,26 @@ def hook(arg1, arg2, arg3):
 
 
 @hookimpl(wrapper=True)
-def wrapper(arg1, arg2, arg3):
+def wrapper(arg1: object, arg2: object, arg3: object) -> Generator[None, None, None]:
     return (yield)
 
 
 @pytest.fixture(params=[10, 100], ids="hooks={}".format)
-def hooks(request):
-    return [hook for i in range(request.param)]
+def hooks(request: pytest.FixtureRequest) -> list[types.FunctionType]:
+    return [hook] * request.param
 
 
 @pytest.fixture(params=[10, 100], ids="wrappers={}".format)
-def wrappers(request):
-    return [wrapper for i in range(request.param)]
+def wrappers(request: pytest.FixtureRequest) -> list[types.FunctionType]:
+    return [wrapper] * request.param
 
 
-def test_hook_and_wrappers_speed(benchmark, hooks, wrappers):
-    def setup():
+def test_hook_and_wrappers_speed(
+    benchmark: BenchmarkProtocol,
+    hooks: list[types.FunctionType],
+    wrappers: list[types.FunctionType],
+) -> None:
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
         hook_name = "foo"
         hook_impls = []
         for method in hooks + wrappers:
@@ -65,12 +84,14 @@ def test_hook_and_wrappers_speed(benchmark, hooks, wrappers):
         (100, 100, 0),
     ],
 )
-def test_call_hook(benchmark, plugins, wrappers, nesting):
+def test_call_hook(
+    benchmark: BenchmarkProtocol, plugins: int, wrappers: int, nesting: int
+) -> None:
     pm = PluginManager("example")
 
     class HookSpec:
         @hookspec
-        def fun(self, hooks, nesting: int):
+        def fun(self, hooks: HookRelay, nesting: int) -> None:
             pass
 
     class Plugin:
@@ -81,7 +102,7 @@ def test_call_hook(benchmark, plugins, wrappers, nesting):
             return f"<Plugin {self.num}>"
 
         @hookimpl
-        def fun(self, hooks, nesting: int) -> None:
+        def fun(self, hooks: HookRelay, nesting: int) -> None:
             if nesting:
                 hooks.fun(hooks=hooks, nesting=nesting - 1)
 
@@ -93,7 +114,7 @@ def test_call_hook(benchmark, plugins, wrappers, nesting):
             return f"<PluginWrap {self.num}>"
 
         @hookimpl(wrapper=True)
-        def fun(self):
+        def fun(self) -> Generator[None, None, None]:
             return (yield)
 
     pm.add_hookspecs(HookSpec)

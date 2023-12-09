@@ -100,8 +100,8 @@ class HookspecMarker:
         warn_on_impl_args: Mapping[str, Warning] | None = None,
     ) -> _F: ...
 
-    @overload  # noqa: F811
-    def __call__(  # noqa: F811
+    @overload
+    def __call__(
         self,
         function: None = ...,
         firstresult: bool = ...,
@@ -110,7 +110,7 @@ class HookspecMarker:
         warn_on_impl_args: Mapping[str, Warning] | None = ...,
     ) -> Callable[[_F], _F]: ...
 
-    def __call__(  # noqa: F811
+    def __call__(
         self,
         function: _F | None = None,
         firstresult: bool = False,

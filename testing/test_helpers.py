@@ -9,7 +9,7 @@ from pluggy._manager import _formatdef
 
 
 def test_varnames() -> None:
-    def f(x) -> None:
+    def f(x: object) -> None:
         i = 3  # noqa
 
     class A:

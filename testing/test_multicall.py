@@ -354,8 +354,8 @@ def test_wrapper_exception_chaining() -> None:
     def m2():
         try:
             yield
-        except Exception:
-            raise Exception("m2")
+        except Exception as e:
+            raise Exception("m2") from e
 
     @hookimpl(wrapper=True)
     def m3():

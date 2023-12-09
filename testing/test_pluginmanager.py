@@ -422,8 +422,8 @@ def test_call_with_too_few_args(pm: PluginManager) -> None:
 
     class Plugin1:
         @hookimpl
-        def he_method1(self, arg):
-            0 / 0
+        def he_method1(self, arg: object) -> None:
+            raise ZeroDivisionError()
 
     pm.register(Plugin1())
     with pytest.raises(HookCallError):
