@@ -49,7 +49,3 @@ repos:
         files: ^(src/|testing/)
         args: []
         additional_dependencies: [pytest]
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.1.7
-  hooks:
-    - id: ruff
