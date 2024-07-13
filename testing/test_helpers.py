@@ -10,7 +10,8 @@ from pluggy._manager import _formatdef
 
 def test_varnames() -> None:
     def f(x: object) -> None:
-        i = 3  # noqa
+        i = 3
+        str(i)  # added to prevent autoremove of the useless statement
 
     class A:
         def f(self, y) -> None:

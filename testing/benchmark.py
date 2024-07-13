@@ -1,10 +1,10 @@
 """
 Benchmarking and performance tests.
 """
+
 import types
 from typing import Generator
 from typing import Protocol
-
 
 import pytest
 

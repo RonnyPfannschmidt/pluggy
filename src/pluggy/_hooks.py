@@ -189,8 +189,8 @@ class HookimplMarker:
         wrapper: bool = ...,
     ) -> _F: ...
 
-    @overload  # noqa: F811
-    def __call__(  # noqa: F811
+    @overload
+    def __call__(
         self,
         function: None = ...,
         hookwrapper: bool = ...,
@@ -201,7 +201,7 @@ class HookimplMarker:
         wrapper: bool = ...,
     ) -> Callable[[_F], _F]: ...
 
-    def __call__(  # noqa: F811
+    def __call__(
         self,
         function: _F | None = None,
         hookwrapper: bool = False,
@@ -489,8 +489,8 @@ class HookCaller:
                         if argname not in kwargs.keys()
                     )
                     warnings.warn(
-                        "Argument(s) {} which are declared in the hookspec "
-                        "cannot be found in this hook call".format(notincall),
+                        f"Argument(s) {notincall} which are declared in the hookspec "
+                        "cannot be found in this hook call",
                         stacklevel=2,
                     )
                     break
