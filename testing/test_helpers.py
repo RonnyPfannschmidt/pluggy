@@ -14,11 +14,11 @@ def test_varnames() -> None:
         str(i)  # added to prevent autoremove of the useless statement
 
     class A:
-        def f(self, y) -> None:
+        def f(self, y: object) -> None:
             pass
 
     class B:
-        def __call__(self, z) -> None:
+        def __call__(self, z: object) -> None:
             pass
 
     assert varnames(f) == (("x",), ())
@@ -27,7 +27,7 @@ def test_varnames() -> None:
 
 
 def test_varnames_default() -> None:
-    def f(x, y=3) -> None:
+    def f(x: object, y: object=3) -> None:
         pass
 
     assert varnames(f) == (("x",), ("y",))
@@ -35,14 +35,14 @@ def test_varnames_default() -> None:
 
 def test_varnames_class() -> None:
     class C:
-        def __init__(self, x) -> None:
+        def __init__(self, x: object) -> None:
             pass
 
     class D:
         pass
 
     class E:
-        def __init__(self, x) -> None:
+        def __init__(self, x: object) -> None:
             pass
 
     class F:

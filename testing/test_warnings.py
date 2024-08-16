@@ -29,11 +29,11 @@ def test_teardown_raised_warning(pm: PluginManager) -> None:
         @hookimpl(hookwrapper=True)
         def my_hook(self):
             yield
-            1 / 0
+            1 / 0  # noqa: B018
 
     class Plugin3:
         @hookimpl(hookwrapper=True)
-        def my_hook(self):
+        def my_hook(self) -> Iterator[None]:
             yield
 
     pm.register(Plugin1(), "plugin1")

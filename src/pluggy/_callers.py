@@ -50,7 +50,7 @@ def _warn_teardown_exception(
     warnings.warn(PluggyTeardownRaisedWarning(msg), stacklevel=5)
 
 
-def _multicall(
+def _multicall(  # noqa: C901
     hook_name: str,
     hook_impls: Sequence[HookImpl],
     caller_kwargs: Mapping[str, object],
@@ -76,7 +76,7 @@ def _multicall(
                         if argname not in caller_kwargs:
                             raise HookCallError(
                                 f"hook call must provide argument {argname!r}"
-                            )
+                            ) from None
 
                 if hook_impl.hookwrapper:
                     only_new_style_wrappers = False

@@ -70,4 +70,4 @@ class TagTracerSub:
         self.root._processmessage(self.tags, args)
 
     def get(self, name: str) -> TagTracerSub:
-        return self.__class__(self.root, self.tags + (name,))
+        return self.__class__(self.root, (*self.tags, name))

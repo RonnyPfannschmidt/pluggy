@@ -1,4 +1,7 @@
+from typing import Any
 from typing import Callable
+from typing import Generator
+from typing import Iterator
 from typing import List
 from typing import Mapping
 from typing import Sequence
@@ -33,30 +36,30 @@ def MC(
 
 def test_keyword_args() -> None:
     @hookimpl
-    def f(x):
+    def f(x: int) -> int:
         return x + 1
 
     class A:
         @hookimpl
-        def f(self, x, y):
+        def f(self, x: int, y: int) -> int:
             return x + y
 
-    reslist = MC([f, A().f], dict(x=23, y=24))
+    reslist = MC([f, A().f], {"x": 23, "y": 24})
     assert reslist == [24 + 23, 24]
 
 
 def test_keyword_args_with_defaultargs() -> None:
     @hookimpl
-    def f(x, z=1):
+    def f(x: int, z: int = 1) -> int:
         return x + z
 
-    reslist = MC([f], dict(x=23, y=24))
+    reslist = MC([f], {"x": 23, "y": 24})
     assert reslist == [24]
 
 
 def test_tags_call_error() -> None:
     @hookimpl
-    def f(x):
+    def f(x: int) -> int:
         return x
 
     with pytest.raises(HookCallError):
@@ -65,11 +68,11 @@ def test_tags_call_error() -> None:
 
 def test_call_none_is_no_result() -> None:
     @hookimpl
-    def m1():
+    def m1() -> int:
         return 1
 
     @hookimpl
-    def m2():
+    def m2() -> None:
         return None
 
     res = MC([m1, m2], {}, firstresult=True)
@@ -82,13 +85,13 @@ def test_hookwrapper() -> None:
     out = []
 
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Iterator[None]:
         out.append("m1 init")
         yield None
         out.append("m1 finish")
 
     @hookimpl
-    def m2():
+    def m2() -> int:
         out.append("m2")
         return 2
 
@@ -103,7 +106,7 @@ def test_hookwrapper() -> None:
 
 def test_hookwrapper_two_yields() -> None:
     @hookimpl(hookwrapper=True)
-    def m():
+    def m() -> Iterator[None]:
         yield
         yield
 
@@ -115,14 +118,14 @@ def test_wrapper() -> None:
     out = []
 
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Generator[None, int, int]:
         out.append("m1 init")
         result = yield
         out.append("m1 finish")
         return result * 2
 
     @hookimpl
-    def m2():
+    def m2() -> int:
         out.append("m2")
         return 2
 
@@ -137,7 +140,7 @@ def test_wrapper() -> None:
 
 def test_wrapper_two_yields() -> None:
     @hookimpl(wrapper=True)
-    def m():
+    def m() -> Iterator[None]:
         yield
         yield
 
@@ -149,26 +152,26 @@ def test_hookwrapper_order() -> None:
     out = []
 
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Generator[int]:
         out.append("m1 init")
         yield 1
         out.append("m1 finish")
 
     @hookimpl(wrapper=True)
-    def m2():
+    def m2() -> Generator[int, int, int]:
         out.append("m2 init")
         result = yield 2
         out.append("m2 finish")
         return result
 
     @hookimpl(hookwrapper=True)
-    def m3():
+    def m3() -> Iterator[int]:
         out.append("m3 init")
         yield 3
         out.append("m3 finish")
 
     @hookimpl(hookwrapper=True)
-    def m4():
+    def m4() -> Iterator[int]:
         out.append("m4 init")
         yield 4
         out.append("m4 finish")
@@ -189,7 +192,7 @@ def test_hookwrapper_order() -> None:
 
 def test_hookwrapper_not_yield() -> None:
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> None:
         pass
 
     with pytest.raises(TypeError):
@@ -198,7 +201,7 @@ def test_hookwrapper_not_yield() -> None:
 
 def test_hookwrapper_yield_not_executed() -> None:
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Generator[None]:
         if False:
             yield  # type: ignore[unreachable]
 
@@ -208,7 +211,7 @@ def test_hookwrapper_yield_not_executed() -> None:
 
 def test_hookwrapper_too_many_yield() -> None:
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Iterator[int]:
         yield 1
         yield 2
 
@@ -220,9 +223,9 @@ def test_hookwrapper_too_many_yield() -> None:
 
 def test_wrapper_yield_not_executed() -> None:
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Iterator[None]:
         if False:
-            yield  # type: ignore[unreachable]
+            yield
 
     with pytest.raises(RuntimeError, match="did not yield"):
         MC([m1], {})
@@ -232,7 +235,7 @@ def test_wrapper_too_many_yield() -> None:
     out = []
 
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Iterator[int]:
         try:
             yield 1
             yield 2
@@ -254,7 +257,7 @@ def test_hookwrapper_exception(exc: "Type[BaseException]") -> None:
     out = []
 
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Generator[None, int, None]:
         out.append("m1 init")
         result = yield
         assert isinstance(result.exception, exc)
@@ -262,7 +265,7 @@ def test_hookwrapper_exception(exc: "Type[BaseException]") -> None:
         out.append("m1 finish")
 
     @hookimpl
-    def m2():
+    def m2() -> None:
         raise exc
 
     with pytest.raises(exc):
@@ -274,7 +277,7 @@ def test_hookwrapper_force_exception() -> None:
     out = []
 
     @hookimpl(hookwrapper=True)
-    def m1():
+    def m1() -> Generator[None, Any, None]:
         out.append("m1 init")
         result = yield
         try:
@@ -284,7 +287,7 @@ def test_hookwrapper_force_exception() -> None:
         out.append("m1 finish")
 
     @hookimpl(hookwrapper=True)
-    def m2():
+    def m2() -> Generator[None, Any, None]:
         out.append("m2 init")
         result = yield
         try:
@@ -296,13 +299,13 @@ def test_hookwrapper_force_exception() -> None:
         out.append("m2 finish")
 
     @hookimpl(hookwrapper=True)
-    def m3():
+    def m3() -> Iterator[None]:
         out.append("m3 init")
         yield
         out.append("m3 finish")
 
     @hookimpl
-    def m4():
+    def m4() -> None:
         raise ValueError("m4")
 
     with pytest.raises(OSError, match="m2") as excinfo:
@@ -324,7 +327,7 @@ def test_wrapper_exception(exc: "Type[BaseException]") -> None:
     out = []
 
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Generator[None, int, int]:
         out.append("m1 init")
         try:
             result = yield
@@ -336,7 +339,7 @@ def test_wrapper_exception(exc: "Type[BaseException]") -> None:
         return result
 
     @hookimpl
-    def m2():
+    def m2() -> None:
         out.append("m2 init")
         raise exc
 
@@ -347,23 +350,23 @@ def test_wrapper_exception(exc: "Type[BaseException]") -> None:
 
 def test_wrapper_exception_chaining() -> None:
     @hookimpl
-    def m1():
+    def m1() -> None:
         raise Exception("m1")
 
     @hookimpl(wrapper=True)
-    def m2():
+    def m2() -> Generator[None, None, None]:
         try:
             yield
         except Exception as e:
             raise Exception("m2") from e
 
     @hookimpl(wrapper=True)
-    def m3():
+    def m3() -> Generator[None, Any, int]:
         yield
         return 10
 
     @hookimpl(wrapper=True)
-    def m4():
+    def m4() -> Generator[None, None, None]:
         try:
             yield
         except Exception as e:
@@ -382,7 +385,7 @@ def test_unwind_inner_wrapper_teardown_exc() -> None:
     out = []
 
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Generator[None, None, None]:
         out.append("m1 init")
         try:
             yield
@@ -394,7 +397,7 @@ def test_unwind_inner_wrapper_teardown_exc() -> None:
             out.append("m1 cleanup")
 
     @hookimpl(wrapper=True)
-    def m2():
+    def m2() -> Generator[None, None, None]:
         out.append("m2 init")
         yield
         out.append("m2 raise")
@@ -420,14 +423,14 @@ def test_suppress_inner_wrapper_teardown_exc() -> None:
     out = []
 
     @hookimpl(wrapper=True)
-    def m1():
+    def m1() -> Generator[None, int, int]:
         out.append("m1 init")
         result = yield
         out.append("m1 finish")
         return result
 
     @hookimpl(wrapper=True)
-    def m2():
+    def m2() -> Generator[None, None, int]:  # type: ignore[return]
         out.append("m2 init")
         try:
             yield
@@ -437,7 +440,7 @@ def test_suppress_inner_wrapper_teardown_exc() -> None:
             return 22
 
     @hookimpl(wrapper=True)
-    def m3():
+    def m3() -> Generator[None, None, None]:
         out.append("m3 init")
         yield
         out.append("m3 raise")

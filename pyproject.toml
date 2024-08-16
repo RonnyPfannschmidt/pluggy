@@ -8,9 +8,9 @@ build-backend = "setuptools.build_meta"
 
 
 [tool.ruff.lint]
-select = [
-    "I",  # isort
-]
+extend-select = ["B", "C","TCH", "UP", "RUF", "ANN", "I"]
+extend-ignore = ["ANN101"]
+
 
 [tool.ruff.lint.isort]
 force-single-line = true
@@ -61,8 +61,6 @@ template = "changelog/_template.rst"
   name = "Trivial/Internal Changes"
   showcontent = true
 
-[tool.ruff]
-extend-select = ["B", "C","TCH", "UP", "RUF"]
 
 [tool.mypy]
 mypy_path = "src"

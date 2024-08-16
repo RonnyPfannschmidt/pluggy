@@ -3,8 +3,11 @@ Benchmarking and performance tests.
 """
 
 import types
+from typing import Any
+from typing import Callable
 from typing import Generator
 from typing import Protocol
+from typing import Tuple
 
 import pytest
 
@@ -19,10 +22,10 @@ from pluggy._hooks import HookImpl
 class BenchmarkProtocol(Protocol):
     "stand in for missing types in pytest-benchmark"
 
-    def __call__(self, object, *k: object, **kw: object) -> None:
+    def __call__(self, object: Any, *k: object, **kw: object) -> None:
         pass
 
-    def pedantic(self, object, *k: object, **kw: object) -> None:
+    def pedantic(self, object: Any, *k: object, **kw: object) -> None:
         pass
 
 
@@ -30,23 +33,31 @@ hookspec = HookspecMarker("example")
 hookimpl = HookimplMarker("example")
 
 
+ExampleResult = Tuple[object, object, object]
+GenResult = Generator[None, None, None]
+
+
 @hookimpl
-def hook(arg1, arg2, arg3):
+def hook(arg1: object, arg2: object, arg3: object) -> ExampleResult:
     return arg1, arg2, arg3
 
 
 @hookimpl(wrapper=True)
-def wrapper(arg1: object, arg2: object, arg3: object) -> Generator[None, None, None]:
+def wrapper(arg1: object, arg2: object, arg3: object) -> GenResult:
     return (yield)
 
 
 @pytest.fixture(params=[10, 100], ids="hooks={}".format)
-def hooks(request: pytest.FixtureRequest) -> list[types.FunctionType]:
+def hooks(
+    request: pytest.FixtureRequest,
+) -> list[Callable[[object, object, object], ExampleResult]]:
     return [hook] * request.param
 
 
 @pytest.fixture(params=[10, 100], ids="wrappers={}".format)
-def wrappers(request: pytest.FixtureRequest) -> list[types.FunctionType]:
+def wrappers(
+    request: pytest.FixtureRequest,
+) -> list[Callable[[object, object, object], GenResult]]:
     return [wrapper] * request.param
 
 
@@ -59,13 +70,44 @@ def test_hook_and_wrappers_speed(
         hook_name = "foo"
         hook_impls = []
         for method in hooks + wrappers:
-            f = HookImpl(None, "<temp>", method, method.example_impl)
+            f = HookImpl(None, "<temp>", method, method.example_impl)  # type: ignore[attr-defined]
             hook_impls.append(f)
         caller_kwargs = {"arg1": 1, "arg2": 2, "arg3": 3}
         firstresult = False
         return (hook_name, hook_impls, caller_kwargs, firstresult), {}
 
     benchmark.pedantic(_multicall, setup=setup, rounds=10)
+
+
+class HookSpec:
+    @hookspec
+    def fun(self, hooks: HookRelay, nesting: int) -> None:
+        pass
+
+
+class Plugin:
+    def __init__(self, num: int) -> None:
+        self.num = num
+
+    def __repr__(self) -> str:
+        return f"<Plugin {self.num}>"
+
+    @hookimpl
+    def fun(self, hooks: HookRelay, nesting: int) -> None:
+        if nesting:
+            hooks.fun(hooks=hooks, nesting=nesting - 1)
+
+
+class PluginWrap:
+    def __init__(self, num: int) -> None:
+        self.num = num
+
+    def __repr__(self) -> str:
+        return f"<PluginWrap {self.num}>"
+
+    @hookimpl(wrapper=True)
+    def fun(self) -> Generator[None, None, None]:
+        return (yield)
 
 
 @pytest.mark.parametrize(
@@ -88,34 +130,6 @@ def test_call_hook(
     benchmark: BenchmarkProtocol, plugins: int, wrappers: int, nesting: int
 ) -> None:
     pm = PluginManager("example")
-
-    class HookSpec:
-        @hookspec
-        def fun(self, hooks: HookRelay, nesting: int) -> None:
-            pass
-
-    class Plugin:
-        def __init__(self, num: int) -> None:
-            self.num = num
-
-        def __repr__(self) -> str:
-            return f"<Plugin {self.num}>"
-
-        @hookimpl
-        def fun(self, hooks: HookRelay, nesting: int) -> None:
-            if nesting:
-                hooks.fun(hooks=hooks, nesting=nesting - 1)
-
-    class PluginWrap:
-        def __init__(self, num: int) -> None:
-            self.num = num
-
-        def __repr__(self) -> str:
-            return f"<PluginWrap {self.num}>"
-
-        @hookimpl(wrapper=True)
-        def fun(self) -> Generator[None, None, None]:
-            return (yield)
 
     pm.add_hookspecs(HookSpec)
 

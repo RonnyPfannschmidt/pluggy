@@ -1,3 +1,5 @@
+from typing import Any
+from typing import Generator
 from typing import Iterator
 
 import pytest
@@ -15,7 +17,7 @@ hookimpl = HookimplMarker("example")
 def test_argmismatch(pm: PluginManager) -> None:
     class Api:
         @hookspec
-        def hello(self, arg):
+        def hello(self, arg: Any) -> Any:
             "api hook 1"
 
     pm.add_hookspecs(Api)
@@ -305,18 +307,18 @@ def test_non_wrapper_generator(pm: PluginManager) -> None:
 
     class Plugin1:
         @hookimpl
-        def hello(self):
+        def hello(self) -> Iterator[int]:
             yield 1
 
     class Plugin2:
         @hookimpl
-        def hello(self):
+        def hello(self) -> Iterator[int]:
             yield 2
             yield 3
 
     class Plugin3:
         @hookimpl(wrapper=True)
-        def hello(self):
+        def hello(self) -> Generator[None, object, object]:
             return (yield)
 
     pm.register(Plugin1())

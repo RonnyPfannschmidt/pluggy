@@ -10,7 +10,7 @@ import pluggy
 condiments_tray = {"pickled walnuts": 13, "steak sauce": 4, "mushy peas": 2}
 
 
-def main():
+def main() -> None:
     pm = get_plugin_manager()
     cook = EggsellentCook(pm.hook)
     cook.add_ingredients()
@@ -18,7 +18,7 @@ def main():
     cook.serve_the_food()
 
 
-def get_plugin_manager():
+def get_plugin_manager() -> pluggy.PluginManager:
     pm = pluggy.PluginManager("eggsample")
     pm.add_hookspecs(hookspecs)
     pm.load_setuptools_entrypoints("eggsample")
@@ -28,12 +28,12 @@ def get_plugin_manager():
 
 class EggsellentCook:
     FAVORITE_INGREDIENTS = ("egg", "egg", "egg")
-
-    def __init__(self, hook):
+    ingredients : list[str]
+    def __init__(self, hook: pluggy.HookRelay) -> None:
         self.hook = hook
-        self.ingredients = None
+        self.ingredients = []
 
-    def add_ingredients(self):
+    def add_ingredients(self) -> None:
         results = self.hook.eggsample_add_ingredients(
             ingredients=self.FAVORITE_INGREDIENTS
         )
@@ -42,10 +42,10 @@ class EggsellentCook:
         other_ingredients = list(itertools.chain(*results))
         self.ingredients = my_ingredients + other_ingredients
 
-    def prepare_the_food(self):
+    def prepare_the_food(self) -> None:
         random.shuffle(self.ingredients)
 
-    def serve_the_food(self):
+    def serve_the_food(self) -> None:
         condiment_comments = self.hook.eggsample_prep_condiments(
             condiments=condiments_tray
         )

@@ -1,3 +1,6 @@
+from types import ModuleType
+from typing import Generator
+from typing import Iterator
 from typing import NoReturn
 
 import pytest
@@ -5,6 +8,7 @@ import pytest
 from pluggy import HookimplMarker
 from pluggy import HookspecMarker
 from pluggy import PluginManager
+from pluggy._hooks import HookimplOpts
 
 
 hookspec = HookspecMarker("example")
@@ -13,7 +17,9 @@ hookimpl = HookimplMarker("example")
 
 def test_parse_hookimpl_override() -> None:
     class MyPluginManager(PluginManager):
-        def parse_hookimpl_opts(self, module_or_class, name):
+        def parse_hookimpl_opts(
+            self, module_or_class: ModuleType | type, name: str
+        ) -> HookimplOpts | None:
             opts = PluginManager.parse_hookimpl_opts(self, module_or_class, name)
             if opts is None:
                 if name.startswith("x1"):
@@ -21,28 +27,28 @@ def test_parse_hookimpl_override() -> None:
             return opts
 
     class Plugin:
-        def x1meth(self):
+        def x1meth(self) -> None:
             pass
 
         @hookimpl(hookwrapper=True, tryfirst=True)
-        def x1meth2(self):
+        def x1meth2(self) -> Iterator[None]:
             yield  # pragma: no cover
 
         @hookimpl(wrapper=True, trylast=True)
-        def x1meth3(self):
+        def x1meth3(self) -> Generator[None, None, None]:
             return (yield)  # pragma: no cover
 
     class Spec:
         @hookspec
-        def x1meth(self):
+        def x1meth(self) -> None:
             pass
 
         @hookspec
-        def x1meth2(self):
+        def x1meth2(self) -> None:
             pass
 
         @hookspec
-        def x1meth3(self):
+        def x1meth3(self) -> None:
             pass
 
     pm = MyPluginManager(hookspec.project_name)
@@ -71,12 +77,12 @@ def test_parse_hookimpl_override() -> None:
     assert hookimpls[0].trylast
 
 
-def test_warn_when_deprecated_specified(recwarn) -> None:
+def test_warn_when_deprecated_specified(recwarn: pytest.WarningsRecorder) -> None:
     warning = DeprecationWarning("foo is deprecated")
 
     class Spec:
         @hookspec(warn_on_impl=warning)
-        def foo(self):
+        def foo(self) -> None:
             pass
 
     class Plugin:
@@ -95,7 +101,7 @@ def test_warn_when_deprecated_specified(recwarn) -> None:
     assert record.lineno == Plugin.foo.__code__.co_firstlineno
 
 
-def test_warn_when_deprecated_args_specified(recwarn) -> None:
+def test_warn_when_deprecated_args_specified(recwarn: pytest.WarningsRecorder) -> None:
     warning1 = DeprecationWarning("old1 is deprecated")
     warning2 = DeprecationWarning("old2 is deprecated")
 
@@ -106,12 +112,12 @@ def test_warn_when_deprecated_args_specified(recwarn) -> None:
                 "old2": warning2,
             },
         )
-        def foo(self, old1, new, old2):
+        def foo(self, old1: object, new: object, old2: object) -> NoReturn:
             raise NotImplementedError()
 
     class Plugin:
         @hookimpl
-        def foo(self, old2, old1, new):
+        def foo(self, old2: object, old1: object, new: object) -> NoReturn:
             raise NotImplementedError()
 
     pm = PluginManager(hookspec.project_name)
@@ -172,10 +178,10 @@ def test_not_all_arguments_are_provided_issues_a_warning(pm: PluginManager) -> N
         pm.hook.hello(arg2=2)
 
     with pytest.warns(UserWarning, match=r"'arg1', 'arg2'.*cannot be found.*$"):
-        pm.hook.hello.call_extra([], kwargs=dict())
+        pm.hook.hello.call_extra([], kwargs={})
 
     with pytest.warns(UserWarning, match=r"'arg1', 'arg2'.*cannot be found.*$"):
-        pm.hook.herstory.call_historic(kwargs=dict())
+        pm.hook.herstory.call_historic(kwargs={})
 
 
 def test_repr() -> None:

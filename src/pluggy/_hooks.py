@@ -306,7 +306,7 @@ def varnames(func: object) -> tuple[tuple[str, ...], tuple[str, ...]]:
             return (), ()
     elif not inspect.isroutine(func):  # callable object?
         try:
-            func = getattr(func, "__call__", func)
+            func = getattr(func, "__call__", func)  # noqa: B004
         except Exception:
             return (), ()
 

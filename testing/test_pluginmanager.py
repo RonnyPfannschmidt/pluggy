@@ -153,7 +153,7 @@ def test_register_mismatch_arg(he_pm: PluginManager) -> None:
 def test_register_hookwrapper_not_a_generator_function(he_pm: PluginManager) -> None:
     class hello:
         @hookimpl(hookwrapper=True)
-        def he_method1(self):
+        def he_method1(self) -> None:
             pass  # pragma: no cover
 
     plugin = hello()
@@ -230,7 +230,7 @@ def test_register_historic(pm: PluginManager) -> None:
 
     pm.add_hookspecs(Hooks)
 
-    pm.hook.he_method1.call_historic(kwargs=dict(arg=1))
+    pm.hook.he_method1.call_historic(kwargs={"arg": 1})
     out = []
 
     class Plugin:
@@ -248,7 +248,7 @@ def test_register_historic(pm: PluginManager) -> None:
 
     pm.register(Plugin2())
     assert out == [1, 10]
-    pm.hook.he_method1.call_historic(kwargs=dict(arg=12))
+    pm.hook.he_method1.call_historic(kwargs={"arg": 12})
     assert out == [1, 10, 120, 12]
 
 
@@ -275,7 +275,7 @@ def test_historic_with_subset_hook_caller(pm: PluginManager) -> None:
             out.append(arg * 10)
 
     shc = pm.subset_hook_caller("he_method1", remove_plugins=[plugin])
-    shc.call_historic(kwargs=dict(arg=1))
+    shc.call_historic(kwargs={"arg": 1})
 
     pm.register(Plugin2())
     assert out == [10]
@@ -313,7 +313,7 @@ def test_with_result_memorized(pm: PluginManager, result_callback: bool) -> None
     pm.register(Plugin1())
 
     he_method1 = pm.hook.he_method1
-    he_method1.call_historic(result_callback=callback, kwargs=dict(arg=1))
+    he_method1.call_historic(result_callback=callback, kwargs={"arg": 1})
 
     class Plugin2:
         @hookimpl
@@ -355,7 +355,7 @@ def test_with_callbacks_immediately_executed(pm: PluginManager) -> None:
     pm.register(Plugin2())
 
     he_method1 = pm.hook.he_method1
-    he_method1.call_historic(lambda res: out.append(res), dict(arg=1))
+    he_method1.call_historic(lambda res: out.append(res), {"arg": 1})
     assert out == [20, 10]
     pm.register(Plugin3())
     assert out == [20, 10, 30]
@@ -408,7 +408,7 @@ def test_call_extra(pm: PluginManager) -> None:
     def he_method1(arg):
         return arg * 10
 
-    out = pm.hook.he_method1.call_extra([he_method1], dict(arg=1))
+    out = pm.hook.he_method1.call_extra([he_method1], {"arg": 1})
     assert out == [10]
 
 
@@ -518,19 +518,19 @@ def test_get_hookimpls(pm: PluginManager) -> None:
 def test_get_hookcallers(pm: PluginManager) -> None:
     class Hooks:
         @hookspec
-        def he_method1(self): ...
+        def he_method1(self) -> None: ...
 
         @hookspec
-        def he_method2(self): ...
+        def he_method2(self) -> None: ...
 
     pm.add_hookspecs(Hooks)
 
     class Plugin1:
         @hookimpl
-        def he_method1(self): ...
+        def he_method1(self) -> None: ...
 
         @hookimpl
-        def he_method2(self): ...
+        def he_method2(self) -> None: ...
 
     class Plugin2:
         @hookimpl
@@ -682,7 +682,7 @@ def test_hook_tracing(he_pm: PluginManager) -> None:
 
 
 @pytest.mark.parametrize("historic", [False, True])
-def test_register_while_calling(
+def test_register_while_calling(  # noqa: C901
     pm: PluginManager,
     historic: bool,
 ) -> None:

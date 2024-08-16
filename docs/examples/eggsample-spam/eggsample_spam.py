@@ -1,8 +1,8 @@
 import eggsample
-
+from typing import Any
 
 @eggsample.hookimpl
-def eggsample_add_ingredients(ingredients):
+def eggsample_add_ingredients(ingredients: tuple[str]) -> list[str]:
     """Here the caller expects us to return a list."""
     if "egg" in ingredients:
         spam = ["lovely spam", "wonderous spam"]
@@ -12,7 +12,7 @@ def eggsample_add_ingredients(ingredients):
 
 
 @eggsample.hookimpl
-def eggsample_prep_condiments(condiments):
+def eggsample_prep_condiments(condiments: dict[str, Any]) -> str:
     """Here the caller passes a mutable object, so we mess with it directly."""
     try:
         del condiments["steak sauce"]

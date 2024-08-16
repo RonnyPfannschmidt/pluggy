@@ -8,7 +8,7 @@ from pluggy import PluginManager
     params=[lambda spec: spec, lambda spec: spec()],
     ids=["spec-is-class", "spec-is-instance"],
 )
-def he_pm(request, pm: PluginManager) -> PluginManager:
+def he_pm(request: pytest.FixtureRequest, pm: PluginManager) -> PluginManager:
     hookspec = HookspecMarker("example")
 
     class Hooks:

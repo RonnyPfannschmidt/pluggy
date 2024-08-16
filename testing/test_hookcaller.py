@@ -1,5 +1,6 @@
 from typing import Callable
 from typing import Generator
+from typing import Iterator
 from typing import List
 from typing import Sequence
 from typing import TypeVar
@@ -162,15 +163,15 @@ def test_adding_wrappers_ordering(hc: HookCaller, addmeth: AddMeth) -> None:
         yield
 
     @addmeth(wrapper=True)
-    def he_method1_fun():
+    def he_method1_fun() -> Iterator[None]:
         yield
 
     @addmeth()
-    def he_method1_middle():
+    def he_method1_middle() -> None:
         return
 
     @addmeth(hookwrapper=True)
-    def he_method3_fun():
+    def he_method3_fun() -> Iterator[None]:
         yield
 
     @addmeth(hookwrapper=True)
@@ -202,7 +203,7 @@ def test_adding_wrappers_ordering_tryfirst(hc: HookCaller, addmeth: AddMeth) -> 
     assert funcs(hc.get_hookimpls()) == [he_method2, he_method1, he_method3]
 
 
-def test_adding_wrappers_complex(hc: HookCaller, addmeth: AddMeth) -> None:
+def test_adding_wrappers_complex(hc: HookCaller, addmeth: AddMeth) -> None:  # noqa: C901
     assert funcs(hc.get_hookimpls()) == []
 
     @addmeth(hookwrapper=True, trylast=True)
@@ -227,7 +228,7 @@ def test_adding_wrappers_complex(hc: HookCaller, addmeth: AddMeth) -> None:
     assert funcs(hc.get_hookimpls()) == [m3, m2, m1, m4]
 
     @addmeth(wrapper=True, tryfirst=True)
-    def m5():
+    def m5() -> Iterator[None]:
         yield
 
     assert funcs(hc.get_hookimpls()) == [m3, m2, m1, m4, m5]
@@ -243,7 +244,7 @@ def test_adding_wrappers_complex(hc: HookCaller, addmeth: AddMeth) -> None:
     assert funcs(hc.get_hookimpls()) == [m3, m2, m7, m6, m1, m4, m5]
 
     @addmeth(wrapper=True)
-    def m8():
+    def m8() -> Iterator[None]:
         yield
 
     assert funcs(hc.get_hookimpls()) == [m3, m2, m7, m6, m1, m4, m8, m5]
@@ -264,7 +265,7 @@ def test_adding_wrappers_complex(hc: HookCaller, addmeth: AddMeth) -> None:
     assert funcs(hc.get_hookimpls()) == [m9, m3, m2, m7, m6, m10, m11, m1, m4, m8, m5]
 
     @addmeth(wrapper=True)
-    def m12():
+    def m12() -> Iterator[None]:
         yield
 
     assert funcs(hc.get_hookimpls()) == [
