@@ -27,7 +27,7 @@ def test_varnames() -> None:
 
 
 def test_varnames_default() -> None:
-    def f(x: object, y: object=3) -> None:
+    def f(x: object, y: object = 3) -> None:
         pass
 
     assert varnames(f) == (("x",), ("y",))

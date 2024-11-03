@@ -1,5 +1,7 @@
-import eggsample
 from typing import Any
+
+import eggsample
+
 
 @eggsample.hookimpl
 def eggsample_add_ingredients(ingredients: tuple[str]) -> list[str]:

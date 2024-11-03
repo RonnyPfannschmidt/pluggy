@@ -28,7 +28,8 @@ def get_plugin_manager() -> pluggy.PluginManager:
 
 class EggsellentCook:
     FAVORITE_INGREDIENTS = ("egg", "egg", "egg")
-    ingredients : list[str]
+    ingredients: list[str]
+
     def __init__(self, hook: pluggy.HookRelay) -> None:
         self.hook = hook
         self.ingredients = []

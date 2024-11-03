@@ -47,7 +47,7 @@ def pre_release(version: str) -> None:
     print(f"{Fore.GREEN}Please push your branch to your fork and open a PR.")
 
 
-def changelog(version: str, write_out: bool =False) -> None:
+def changelog(version: str, write_out: bool = False) -> None:
     if write_out:
         addopts = []
     else:
