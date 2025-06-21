@@ -25,7 +25,6 @@ from ._hooks import HookimplConfiguration
 from ._hooks import HookimplOpts
 from ._hooks import HookRelay
 from ._hooks import HookspecOpts
-from ._hooks import normalize_hookimpl_opts
 from ._result import Result
 
 
