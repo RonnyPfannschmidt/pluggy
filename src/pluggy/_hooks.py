@@ -137,11 +137,6 @@ class HookimplConfiguration:
         #: The name of the hook specification to match, see :ref:`specname`.
         self.specname: Final = specname
 
-    @classmethod
-    def from_opts(cls, opts: HookimplOpts) -> HookimplConfiguration:
-        """Create from HookimplOpts for backward compatibility."""
-        return cls(**opts)
-
     def __repr__(self) -> str:
         attrs = []
         for slot in self.__slots__:
