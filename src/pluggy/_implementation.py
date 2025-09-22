@@ -17,7 +17,6 @@ _Plugin = object
 _HookImplFunction = Callable[..., Any]
 
 
-@final
 class HookImpl:
     """A hook implementation in a :class:`HookCaller`."""
 
@@ -73,3 +72,33 @@ class HookImpl:
 
     def __repr__(self) -> str:
         return f"<HookImpl plugin_name={self.plugin_name!r}, plugin={self.plugin!r}>"
+
+
+@final
+class NormalImpl(HookImpl):
+    """A normal (non-wrapper) hook implementation."""
+
+    def __init__(
+        self,
+        plugin: _Plugin,
+        plugin_name: str,
+        function: _HookImplFunction,
+        hook_impl_opts: HookimplConfiguration,
+    ) -> None:
+        assert not hook_impl_opts.wrapper and not hook_impl_opts.hookwrapper
+        super().__init__(plugin, plugin_name, function, hook_impl_opts)
+
+
+@final
+class WrapperImpl(HookImpl):
+    """A wrapper hook implementation."""
+
+    def __init__(
+        self,
+        plugin: _Plugin,
+        plugin_name: str,
+        function: _HookImplFunction,
+        hook_impl_opts: HookimplConfiguration,
+    ) -> None:
+        assert hook_impl_opts.wrapper or hook_impl_opts.hookwrapper
+        super().__init__(plugin, plugin_name, function, hook_impl_opts)

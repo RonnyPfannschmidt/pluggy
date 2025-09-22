@@ -32,6 +32,46 @@ _HookExec = Callable[
 _CallHistory = list[tuple[Mapping[str, object], Optional[Callable[[Any], None]]]]
 
 
+def _insert_hookimpl_into_list(
+    hookimpls: list[HookImpl],
+    hookimpl: HookImpl,
+    is_wrapper: bool,
+) -> None:
+    """Insert a hook implementation into the appropriate position in a list.
+
+    The list is organized as:
+    1. trylast nonwrappers
+    2. nonwrappers
+    3. tryfirst nonwrappers
+    4. trylast wrappers
+    5. wrappers
+    6. tryfirst wrappers
+    """
+    # Find the split point between non-wrappers and wrappers
+    for i, method in enumerate(hookimpls):
+        if method.hookwrapper or method.wrapper:
+            splitpoint = i
+            break
+    else:
+        splitpoint = len(hookimpls)
+
+    if is_wrapper:
+        start, end = splitpoint, len(hookimpls)
+    else:
+        start, end = 0, splitpoint
+
+    if hookimpl.trylast:
+        hookimpls.insert(start, hookimpl)
+    elif hookimpl.tryfirst:
+        hookimpls.insert(end, hookimpl)
+    else:
+        # find last non-tryfirst method
+        i = end - 1
+        while i >= start and hookimpls[i].tryfirst:
+            i -= 1
+        hookimpls.insert(i + 1, hookimpl)
+
+
 class HookCaller:
     """A caller of all registered implementations of a hook specification."""
 
@@ -39,7 +79,8 @@ class HookCaller:
         "name",
         "spec",
         "_hookexec",
-        "_hookimpls",
+        "_normal_hookimpls",
+        "_wrapper_hookimpls",
         "_call_history",
     )
 
@@ -54,14 +95,11 @@ class HookCaller:
         #: Name of the hook getting called.
         self.name: Final = name
         self._hookexec: Final = hook_execute
-        # The hookimpls list. The caller iterates it *in reverse*. Format:
-        # 1. trylast nonwrappers
-        # 2. nonwrappers
-        # 3. tryfirst nonwrappers
-        # 4. trylast wrappers
-        # 5. wrappers
-        # 6. tryfirst wrappers
-        self._hookimpls: Final[list[HookImpl]] = []
+        # Separate lists for normal and wrapper implementations
+        # Normal impls: trylast -> normal -> tryfirst
+        # Wrapper impls: trylast -> normal -> tryfirst
+        self._normal_hookimpls: Final[list[HookImpl]] = []
+        self._wrapper_hookimpls: Final[list[HookImpl]] = []
         self._call_history: _CallHistory | None = None
         # TODO: Document, or make private.
         self.spec: HookSpec | None = None
@@ -93,39 +131,39 @@ class HookCaller:
         return self._call_history is not None
 
     def _remove_plugin(self, plugin: _Plugin) -> None:
-        for i, method in enumerate(self._hookimpls):
+        # Try to remove from normal implementations
+        for i, method in enumerate(self._normal_hookimpls):
             if method.plugin == plugin:
-                del self._hookimpls[i]
+                del self._normal_hookimpls[i]
+                return
+        # Try to remove from wrapper implementations
+        for i, method in enumerate(self._wrapper_hookimpls):
+            if method.plugin == plugin:
+                del self._wrapper_hookimpls[i]
                 return
         raise ValueError(f"plugin {plugin!r} not found")
 
     def get_hookimpls(self) -> list[HookImpl]:
         """Get all registered hook implementations for this hook."""
-        return self._hookimpls.copy()
+        # Return combined list: normal implementations followed by wrappers
+        return self._normal_hookimpls.copy() + self._wrapper_hookimpls.copy()
 
     def _add_hookimpl(self, hookimpl: HookImpl) -> None:
         """Add an implementation to the callback chain."""
-        for i, method in enumerate(self._hookimpls):
-            if method.hookwrapper or method.wrapper:
-                splitpoint = i
-                break
-        else:
-            splitpoint = len(self._hookimpls)
-        if hookimpl.hookwrapper or hookimpl.wrapper:
-            start, end = splitpoint, len(self._hookimpls)
-        else:
-            start, end = 0, splitpoint
+        is_wrapper = hookimpl.hookwrapper or hookimpl.wrapper
+        target_list = self._wrapper_hookimpls if is_wrapper else self._normal_hookimpls
 
+        # Insert in correct position based on tryfirst/trylast
         if hookimpl.trylast:
-            self._hookimpls.insert(start, hookimpl)
+            target_list.insert(0, hookimpl)
         elif hookimpl.tryfirst:
-            self._hookimpls.insert(end, hookimpl)
+            target_list.append(hookimpl)
         else:
-            # find last non-tryfirst method
-            i = end - 1
-            while i >= start and self._hookimpls[i].tryfirst:
+            # Find last non-tryfirst method
+            i = len(target_list) - 1
+            while i >= 0 and target_list[i].tryfirst:
                 i -= 1
-            self._hookimpls.insert(i + 1, hookimpl)
+            target_list.insert(i + 1, hookimpl)
 
     def __repr__(self) -> str:
         return f"<HookCaller {self.name!r}>"
@@ -164,7 +202,9 @@ class HookCaller:
         self._verify_all_args_are_provided(kwargs)
         firstresult = self.spec.opts.firstresult if self.spec else False
         # Copy because plugins may register other plugins during iteration (#438).
-        return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+        # Combine normal and wrapper implementations
+        hookimpls = self._normal_hookimpls.copy() + self._wrapper_hookimpls.copy()
+        return self._hookexec(self.name, hookimpls, kwargs, firstresult)
 
     def call_historic(
         self,
@@ -186,7 +226,9 @@ class HookCaller:
         # Historizing hooks don't return results.
         # Remember firstresult isn't compatible with historic.
         # Copy because plugins may register other plugins during iteration (#438).
-        res = self._hookexec(self.name, self._hookimpls.copy(), kwargs, False)
+        # Combine normal and wrapper implementations
+        hookimpls = self._normal_hookimpls.copy() + self._wrapper_hookimpls.copy()
+        res = self._hookexec(self.name, hookimpls, kwargs, False)
         if result_callback is None:
             return
         if isinstance(res, list):
@@ -211,19 +253,20 @@ class HookCaller:
             tryfirst=False,
             specname=None,
         )
-        hookimpls = self._hookimpls.copy()
+        # Create a combined list for call_extra
+        normal_impls = self._normal_hookimpls.copy()
+        wrapper_impls = self._wrapper_hookimpls.copy()
+
         for method in methods:
             hookimpl = HookImpl(None, "<temp>", method, opts)
-            # Find last non-tryfirst nonwrapper method.
-            i = len(hookimpls) - 1
-            while i >= 0 and (
-                # Skip wrappers.
-                (hookimpls[i].hookwrapper or hookimpls[i].wrapper)
-                # Skip tryfirst nonwrappers.
-                or hookimpls[i].tryfirst
-            ):
+            # Add to normal implementations (since opts has wrapper=False)
+            # Find last non-tryfirst method
+            i = len(normal_impls) - 1
+            while i >= 0 and normal_impls[i].tryfirst:
                 i -= 1
-            hookimpls.insert(i + 1, hookimpl)
+            normal_impls.insert(i + 1, hookimpl)
+
+        hookimpls = normal_impls + wrapper_impls
         firstresult = self.spec.opts.firstresult if self.spec else False
         return self._hookexec(self.name, hookimpls, kwargs, firstresult)
 
@@ -237,6 +280,56 @@ class HookCaller:
                     # XXX: remember firstresult isn't compat with historic
                     assert isinstance(res, list)
                     result_callback(res[0])
+
+
+class NormalHookCaller(HookCaller):
+    """A hook caller for normal (non-historic) hooks."""
+
+    def __init__(
+        self,
+        name: str,
+        hook_execute: _HookExec,
+        specmodule_or_class: _Namespace | None = None,
+        spec_opts: HookspecConfiguration | None = None,
+    ) -> None:
+        if spec_opts is not None and spec_opts.historic:
+            raise ValueError(f"Hook {name!r} is historic, use HistoricHookCaller")
+        super().__init__(name, hook_execute, specmodule_or_class, spec_opts)
+
+
+class HistoricHookCaller(HookCaller):
+    """A hook caller for historic hooks.
+
+    Historic hooks remember all calls and replay them for newly registered plugins.
+    They don't support wrappers.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        hook_execute: _HookExec,
+        specmodule_or_class: _Namespace | None = None,
+        spec_opts: HookspecConfiguration | None = None,
+    ) -> None:
+        if spec_opts is not None:
+            if not spec_opts.historic:
+                raise ValueError(f"Hook {name!r} is not historic, use NormalHookCaller")
+            if spec_opts.firstresult:
+                raise ValueError("cannot have a historic firstresult hook")
+        super().__init__(name, hook_execute, specmodule_or_class, spec_opts)
+
+    def _add_hookimpl(self, hookimpl: HookImpl) -> None:
+        """Add an implementation to the callback chain.
+
+        Historic hooks don't support wrappers.
+        """
+        if hookimpl.hookwrapper or hookimpl.wrapper:
+            raise ValueError(
+                f"Plugin {hookimpl.plugin_name!r}\n"
+                f"hook {self.name!r}\n"
+                "historic incompatible with yield/wrapper/hookwrapper"
+            )
+        super()._add_hookimpl(hookimpl)
 
 
 # Historical name (pluggy<=1.2), kept for backward compatibility.
@@ -288,10 +381,18 @@ class _SubsetHookCaller(HookCaller):
         self._hookexec = orig._hookexec  # type: ignore[misc]
 
     @property  # type: ignore[misc]
-    def _hookimpls(self) -> list[HookImpl]:
+    def _normal_hookimpls(self) -> list[HookImpl]:
         return [
             impl
-            for impl in self._orig._hookimpls
+            for impl in self._orig._normal_hookimpls
+            if impl.plugin not in self._remove_plugins
+        ]
+
+    @property  # type: ignore[misc]
+    def _wrapper_hookimpls(self) -> list[HookImpl]:
+        return [
+            impl
+            for impl in self._orig._wrapper_hookimpls
             if impl.plugin not in self._remove_plugins
         ]
 
