@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import warnings
 
 from . import _tracing
-from ._callers import _multicall
+from ._execution import _multicall
 from ._hooks import _HookImplFunction
 from ._hooks import _Namespace
 from ._hooks import _Plugin
