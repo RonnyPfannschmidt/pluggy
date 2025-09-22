@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 from typing import Union
 import warnings
 
-from ._config import HookimplOpts
-from ._config import HookspecOpts
+from ._config import HookimplConfiguration
+from ._config import HookspecConfiguration
 from ._decorators import HookSpec
 from ._implementation import HookImpl
 
@@ -48,7 +48,7 @@ class HookCaller:
         name: str,
         hook_execute: _HookExec,
         specmodule_or_class: _Namespace | None = None,
-        spec_opts: HookspecOpts | None = None,
+        spec_opts: HookspecConfiguration | None = None,
     ) -> None:
         """:meta private:"""
         #: Name of the hook getting called.
@@ -77,7 +77,7 @@ class HookCaller:
     def set_specification(
         self,
         specmodule_or_class: _Namespace,
-        spec_opts: HookspecOpts,
+        spec_opts: HookspecConfiguration,
     ) -> None:
         if self.spec is not None:
             raise ValueError(
@@ -85,7 +85,7 @@ class HookCaller:
                 f"within namespace {self.spec.namespace}"
             )
         self.spec = HookSpec(specmodule_or_class, self.name, spec_opts)
-        if spec_opts.get("historic"):
+        if spec_opts.historic:
             self._call_history = []
 
     def is_historic(self) -> bool:
@@ -162,7 +162,7 @@ class HookCaller:
             "Cannot directly call a historic hook - use call_historic instead."
         )
         self._verify_all_args_are_provided(kwargs)
-        firstresult = self.spec.opts.get("firstresult", False) if self.spec else False
+        firstresult = self.spec.opts.firstresult if self.spec else False
         # Copy because plugins may register other plugins during iteration (#438).
         return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
 
@@ -203,14 +203,14 @@ class HookCaller:
             "Cannot directly call a historic hook - use call_historic instead."
         )
         self._verify_all_args_are_provided(kwargs)
-        opts: HookimplOpts = {
-            "wrapper": False,
-            "hookwrapper": False,
-            "optionalhook": False,
-            "trylast": False,
-            "tryfirst": False,
-            "specname": None,
-        }
+        opts = HookimplConfiguration(
+            wrapper=False,
+            hookwrapper=False,
+            optionalhook=False,
+            trylast=False,
+            tryfirst=False,
+            specname=None,
+        )
         hookimpls = self._hookimpls.copy()
         for method in methods:
             hookimpl = HookImpl(None, "<temp>", method, opts)
@@ -224,7 +224,7 @@ class HookCaller:
             ):
                 i -= 1
             hookimpls.insert(i + 1, hookimpl)
-        firstresult = self.spec.opts.get("firstresult", False) if self.spec else False
+        firstresult = self.spec.opts.firstresult if self.spec else False
         return self._hookexec(self.name, hookimpls, kwargs, firstresult)
 
     def _maybe_apply_history(self, method: HookImpl) -> None:

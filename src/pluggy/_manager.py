@@ -13,6 +13,13 @@ from typing import TYPE_CHECKING
 import warnings
 
 from . import _tracing
+from ._config import hookimpl_config_from_opts
+from ._config import HookimplConfiguration
+from ._config import HookimplOpts
+from ._config import hookspec_config_from_opts
+from ._config import HookspecConfiguration
+from ._config import HookspecOpts
+from ._config import normalize_hookimpl_opts
 from ._execution import _multicall
 from ._hooks import _HookImplFunction
 from ._hooks import _Namespace
@@ -20,10 +27,7 @@ from ._hooks import _Plugin
 from ._hooks import _SubsetHookCaller
 from ._hooks import HookCaller
 from ._hooks import HookImpl
-from ._hooks import HookimplOpts
 from ._hooks import HookRelay
-from ._hooks import HookspecOpts
-from ._hooks import normalize_hookimpl_opts
 from ._result import Result
 
 
@@ -154,12 +158,20 @@ class PluginManager:
 
         # register matching hook implementations of the plugin
         for name in dir(plugin):
-            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)
-            if hookimpl_opts is not None:
-                normalize_hookimpl_opts(hookimpl_opts)
+            hookimpl_config = self._parse_hookimpl_config(plugin, name)
+            if hookimpl_config is not None:
                 method: _HookImplFunction[object] = getattr(plugin, name)
-                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_opts)
-                name = hookimpl_opts.get("specname") or name
+                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_config)
+
+                # Validate wrapper/hookwrapper mutual exclusivity
+                if hookimpl.hookwrapper and hookimpl.wrapper:
+                    raise PluginValidationError(
+                        hookimpl.plugin,
+                        f"Plugin {hookimpl.plugin_name!r}\n"
+                        "wrapper and hookwrapper are mutually exclusive",
+                    )
+
+                name = hookimpl_config.specname or name
                 hook: HookCaller | None = getattr(self.hook, name, None)
                 if hook is None:
                     hook = HookCaller(name, self._hookexec)
@@ -169,6 +181,17 @@ class PluginManager:
                     hook._maybe_apply_history(hookimpl)
                 hook._add_hookimpl(hookimpl)
         return plugin_name
+
+    def _parse_hookimpl_config(
+        self, plugin: _Plugin, name: str
+    ) -> HookimplConfiguration | None:
+        """Internal method to obtain a hook implementation configuration."""
+        # First try the legacy parse method for backward compatibility
+        opts = self.parse_hookimpl_opts(plugin, name)
+        if opts is not None:
+            normalize_hookimpl_opts(opts)
+            return hookimpl_config_from_opts(opts)
+        return None
 
     def parse_hookimpl_opts(self, plugin: _Plugin, name: str) -> HookimplOpts | None:
         """Try to obtain a hook implementation from an item with the given name
@@ -185,15 +208,27 @@ class PluginManager:
         if not inspect.isroutine(method):
             return None
         try:
-            res: HookimplOpts | None = getattr(
-                method, self.project_name + "_impl", None
-            )
+            res = getattr(method, self.project_name + "_impl", None)
         except Exception:  # pragma: no cover
-            res = {}  # type: ignore[assignment] #pragma: no cover
-        if res is not None and not isinstance(res, dict):
+            res = {}  # pragma: no cover
+
+        if res is None:
+            return None
+        elif isinstance(res, HookimplConfiguration):
+            # Convert back to dict for backward compatibility
+            return {
+                "wrapper": res.wrapper,
+                "hookwrapper": res.hookwrapper,
+                "optionalhook": res.optionalhook,
+                "tryfirst": res.tryfirst,
+                "trylast": res.trylast,
+                "specname": res.specname,
+            }
+        elif isinstance(res, dict):
+            return res  # type: ignore[return-value]
+        else:
             # false positive
-            res = None  # type:ignore[unreachable] #pragma: no cover
-        return res
+            return None  # pragma: no cover
 
     def unregister(
         self, plugin: _Plugin | None = None, name: str | None = None
@@ -254,15 +289,15 @@ class PluginManager:
         """
         names = []
         for name in dir(module_or_class):
-            spec_opts = self.parse_hookspec_opts(module_or_class, name)
-            if spec_opts is not None:
+            spec_config = self._parse_hookspec_config(module_or_class, name)
+            if spec_config is not None:
                 hc: HookCaller | None = getattr(self.hook, name, None)
                 if hc is None:
-                    hc = HookCaller(name, self._hookexec, module_or_class, spec_opts)
+                    hc = HookCaller(name, self._hookexec, module_or_class, spec_config)
                     setattr(self.hook, name, hc)
                 else:
                     # Plugins registered this hook without knowing the spec.
-                    hc.set_specification(module_or_class, spec_opts)
+                    hc.set_specification(module_or_class, spec_config)
                     for hookfunction in hc.get_hookimpls():
                         self._verify_hook(hc, hookfunction)
                 names.append(name)
@@ -271,6 +306,16 @@ class PluginManager:
             raise ValueError(
                 f"did not find any {self.project_name!r} hooks in {module_or_class!r}"
             )
+
+    def _parse_hookspec_config(
+        self, module_or_class: _Namespace, name: str
+    ) -> HookspecConfiguration | None:
+        """Internal method to obtain a hook specification configuration."""
+        # First try the legacy parse method for backward compatibility
+        opts = self.parse_hookspec_opts(module_or_class, name)
+        if opts is not None:
+            return hookspec_config_from_opts(opts)
+        return None
 
     def parse_hookspec_opts(
         self, module_or_class: _Namespace, name: str
@@ -287,8 +332,22 @@ class PluginManager:
         options for items decorated with :class:`HookspecMarker`.
         """
         method = getattr(module_or_class, name)
-        opts: HookspecOpts | None = getattr(method, self.project_name + "_spec", None)
-        return opts
+        opts = getattr(method, self.project_name + "_spec", None)
+
+        if opts is None:
+            return None
+        elif isinstance(opts, HookspecConfiguration):
+            # Convert back to dict for backward compatibility
+            return {
+                "firstresult": opts.firstresult,
+                "historic": opts.historic,
+                "warn_on_impl": opts.warn_on_impl,
+                "warn_on_impl_args": opts.warn_on_impl_args,
+            }
+        elif isinstance(opts, dict):
+            return opts  # type: ignore[return-value]
+        else:
+            return None
 
     def get_plugins(self) -> set[Any]:
         """Return a set of all registered plugin objects."""
@@ -326,6 +385,13 @@ class PluginManager:
         return None
 
     def _verify_hook(self, hook: HookCaller, hookimpl: HookImpl) -> None:
+        if hookimpl.hookwrapper and hookimpl.wrapper:
+            raise PluginValidationError(
+                hookimpl.plugin,
+                f"Plugin {hookimpl.plugin_name!r}\nhook {hook.name!r}\n"
+                "wrapper and hookwrapper are mutually exclusive",
+            )
+
         if hook.is_historic() and (hookimpl.hookwrapper or hookimpl.wrapper):
             raise PluginValidationError(
                 hookimpl.plugin,

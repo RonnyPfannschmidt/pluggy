@@ -5,6 +5,7 @@ Configuration types and helpers for hook specifications and implementations.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Final
 from typing import TypedDict
 
 
@@ -45,6 +46,68 @@ class HookimplOpts(TypedDict):
     specname: str | None
 
 
+class HookspecConfiguration:
+    """Configuration for a hook specification.
+
+    Replaces the legacy HookspecOpts TypedDict with proper validation.
+    """
+
+    __slots__ = (
+        "firstresult",
+        "historic",
+        "warn_on_impl",
+        "warn_on_impl_args",
+    )
+
+    def __init__(
+        self,
+        firstresult: bool = False,
+        historic: bool = False,
+        warn_on_impl: Warning | None = None,
+        warn_on_impl_args: Mapping[str, Warning] | None = None,
+    ) -> None:
+        if historic and firstresult:
+            raise ValueError("cannot have a historic firstresult hook")
+
+        self.firstresult: Final = firstresult
+        self.historic: Final = historic
+        self.warn_on_impl: Final = warn_on_impl
+        self.warn_on_impl_args: Final = warn_on_impl_args
+
+
+class HookimplConfiguration:
+    """Configuration for a hook implementation.
+
+    Replaces the legacy HookimplOpts TypedDict with proper validation.
+    """
+
+    __slots__ = (
+        "wrapper",
+        "hookwrapper",
+        "optionalhook",
+        "tryfirst",
+        "trylast",
+        "specname",
+    )
+
+    def __init__(
+        self,
+        wrapper: bool = False,
+        hookwrapper: bool = False,
+        optionalhook: bool = False,
+        tryfirst: bool = False,
+        trylast: bool = False,
+        specname: str | None = None,
+    ) -> None:
+        # Don't validate wrapper/hookwrapper - done during registration
+        self.wrapper: Final = wrapper
+        self.hookwrapper: Final = hookwrapper
+        self.optionalhook: Final = optionalhook
+        self.tryfirst: Final = tryfirst
+        self.trylast: Final = trylast
+        self.specname: Final = specname
+
+
 def normalize_hookimpl_opts(opts: HookimplOpts) -> None:
     opts.setdefault("tryfirst", False)
     opts.setdefault("trylast", False)
@@ -52,3 +115,25 @@ def normalize_hookimpl_opts(opts: HookimplOpts) -> None:
     opts.setdefault("hookwrapper", False)
     opts.setdefault("optionalhook", False)
     opts.setdefault("specname", None)
+
+
+def hookspec_config_from_opts(opts: HookspecOpts) -> HookspecConfiguration:
+    """Convert legacy HookspecOpts dict to HookspecConfiguration."""
+    return HookspecConfiguration(
+        firstresult=opts.get("firstresult", False),
+        historic=opts.get("historic", False),
+        warn_on_impl=opts.get("warn_on_impl"),
+        warn_on_impl_args=opts.get("warn_on_impl_args"),
+    )
+
+
+def hookimpl_config_from_opts(opts: HookimplOpts) -> HookimplConfiguration:
+    """Convert legacy HookimplOpts dict to HookimplConfiguration."""
+    return HookimplConfiguration(
+        wrapper=opts.get("wrapper", False),
+        hookwrapper=opts.get("hookwrapper", False),
+        optionalhook=opts.get("optionalhook", False),
+        tryfirst=opts.get("tryfirst", False),
+        trylast=opts.get("trylast", False),
+        specname=opts.get("specname"),
+    )
