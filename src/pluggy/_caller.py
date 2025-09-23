@@ -84,6 +84,13 @@ class HookCaller:
         "_call_history",
     )
 
+    name: Final[str]
+    spec: HookSpec | None
+    _hookexec: Final[_HookExec]
+    _normal_hookimpls: Final[list[HookImpl]]
+    _wrapper_hookimpls: Final[list[HookImpl]]
+    _call_history: _CallHistory | None
+
     def __init__(
         self,
         name: str,
@@ -93,13 +100,13 @@ class HookCaller:
     ) -> None:
         """:meta private:"""
         #: Name of the hook getting called.
-        self.name: Final = name
-        self._hookexec: Final = hook_execute
+        self.name = name
+        self._hookexec = hook_execute
         # Separate lists for normal and wrapper implementations
         # Normal impls: trylast -> normal -> tryfirst
         # Wrapper impls: trylast -> normal -> tryfirst
-        self._normal_hookimpls: Final[list[HookImpl]] = []
-        self._wrapper_hookimpls: Final[list[HookImpl]] = []
+        self._normal_hookimpls = []
+        self._wrapper_hookimpls = []
         self._call_history: _CallHistory | None = None
         # TODO: Document, or make private.
         self.spec: HookSpec | None = None

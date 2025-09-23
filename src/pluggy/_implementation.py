@@ -34,6 +34,18 @@ class HookImpl:
         "trylast",
     )
 
+    function: Final[_HookImplFunction]
+    argnames: Final[tuple[str, ...]]
+    kwargnames: Final[tuple[str, ...]]
+    plugin: Final[_Plugin]
+    opts: Final[HookimplConfiguration]
+    plugin_name: Final[str]
+    wrapper: Final[bool]
+    hookwrapper: Final[bool]
+    optionalhook: Final[bool]
+    tryfirst: Final[bool]
+    trylast: Final[bool]
+
     def __init__(
         self,
         plugin: _Plugin,
@@ -43,32 +55,32 @@ class HookImpl:
     ) -> None:
         """:meta private:"""
         #: The hook implementation function.
-        self.function: Final = function
+        self.function = function
         argnames, kwargnames = varnames(self.function)
         #: The positional parameter names of ``function```.
-        self.argnames: Final = argnames
+        self.argnames = argnames
         #: The keyword parameter names of ``function```.
-        self.kwargnames: Final = kwargnames
+        self.kwargnames = kwargnames
         #: The plugin which defined this hook implementation.
-        self.plugin: Final = plugin
+        self.plugin = plugin
         #: The HookimplConfiguration used to configure this hook implementation.
-        self.opts: Final = hook_impl_opts
+        self.opts = hook_impl_opts
         #: The name of the plugin which defined this hook implementation.
-        self.plugin_name: Final = plugin_name
+        self.plugin_name = plugin_name
         #: Whether the hook implementation is a :ref:`wrapper <hookwrapper>`.
-        self.wrapper: Final = hook_impl_opts.wrapper
+        self.wrapper = hook_impl_opts.wrapper
         #: Whether the hook implementation is an :ref:`old-style wrapper
         #: <old_style_hookwrappers>`.
-        self.hookwrapper: Final = hook_impl_opts.hookwrapper
+        self.hookwrapper = hook_impl_opts.hookwrapper
         #: Whether validation against a hook specification is :ref:`optional
         #: <optionalhook>`.
-        self.optionalhook: Final = hook_impl_opts.optionalhook
+        self.optionalhook = hook_impl_opts.optionalhook
         #: Whether to try to order this hook implementation :ref:`first
         #: <callorder>`.
-        self.tryfirst: Final = hook_impl_opts.tryfirst
+        self.tryfirst = hook_impl_opts.tryfirst
         #: Whether to try to order this hook implementation :ref:`last
         #: <callorder>`.
-        self.trylast: Final = hook_impl_opts.trylast
+        self.trylast = hook_impl_opts.trylast
 
     def __repr__(self) -> str:
         return f"<HookImpl plugin_name={self.plugin_name!r}, plugin={self.plugin!r}>"

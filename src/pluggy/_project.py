@@ -35,6 +35,11 @@ class ProjectSpec:
         "_hookimpl_marker",
     )
 
+    project_name: str
+    _plugin_manager_cls: type[PluginManager] | None
+    _hookspec_marker: HookspecMarker
+    _hookimpl_marker: HookimplMarker
+
     def __init__(
         self,
         project_name: str,

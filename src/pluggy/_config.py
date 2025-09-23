@@ -59,6 +59,11 @@ class HookspecConfiguration:
         "warn_on_impl_args",
     )
 
+    firstresult: Final[bool]
+    historic: Final[bool]
+    warn_on_impl: Final[Warning | None]
+    warn_on_impl_args: Final[Mapping[str, Warning] | None]
+
     def __init__(
         self,
         firstresult: bool = False,
@@ -69,10 +74,10 @@ class HookspecConfiguration:
         if historic and firstresult:
             raise ValueError("cannot have a historic firstresult hook")
 
-        self.firstresult: Final = firstresult
-        self.historic: Final = historic
-        self.warn_on_impl: Final = warn_on_impl
-        self.warn_on_impl_args: Final = warn_on_impl_args
+        self.firstresult = firstresult
+        self.historic = historic
+        self.warn_on_impl = warn_on_impl
+        self.warn_on_impl_args = warn_on_impl_args
 
 
 class HookimplConfiguration:
@@ -90,6 +95,13 @@ class HookimplConfiguration:
         "specname",
     )
 
+    wrapper: Final[bool]
+    hookwrapper: Final[bool]
+    optionalhook: Final[bool]
+    tryfirst: Final[bool]
+    trylast: Final[bool]
+    specname: Final[str | None]
+
     def __init__(
         self,
         wrapper: bool = False,
@@ -100,12 +112,12 @@ class HookimplConfiguration:
         specname: str | None = None,
     ) -> None:
         # Don't validate wrapper/hookwrapper - done during registration
-        self.wrapper: Final = wrapper
-        self.hookwrapper: Final = hookwrapper
-        self.optionalhook: Final = optionalhook
-        self.tryfirst: Final = tryfirst
-        self.trylast: Final = trylast
-        self.specname: Final = specname
+        self.wrapper = wrapper
+        self.hookwrapper = hookwrapper
+        self.optionalhook = optionalhook
+        self.tryfirst = tryfirst
+        self.trylast = trylast
+        self.specname = specname
 
 
 def normalize_hookimpl_opts(opts: HookimplOpts) -> None:
