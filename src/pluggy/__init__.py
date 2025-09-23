@@ -3,9 +3,13 @@ __all__ = [
     "PluginManager",
     "PluginValidationError",
     "HookCaller",
+    "NormalHookCaller",
+    "HistoricHookCaller",
     "HookCallError",
     "HookspecOpts",
     "HookimplOpts",
+    "HookspecConfiguration",
+    "HookimplConfiguration",
     "HookImpl",
     "HookRelay",
     "HookspecMarker",
@@ -15,13 +19,17 @@ __all__ = [
     "PluggyTeardownRaisedWarning",
     "ProjectSpec",
 ]
-from ._hooks import HookCaller
+from ._caller import HistoricHookCaller
+from ._caller import HookCaller
+from ._caller import NormalHookCaller
+from ._config import HookimplConfiguration
+from ._config import HookimplOpts
+from ._config import HookspecConfiguration
+from ._config import HookspecOpts
+from ._decorators import HookimplMarker
+from ._decorators import HookspecMarker
 from ._hooks import HookImpl
-from ._hooks import HookimplMarker
-from ._hooks import HookimplOpts
 from ._hooks import HookRelay
-from ._hooks import HookspecMarker
-from ._hooks import HookspecOpts
 from ._manager import PluginManager
 from ._manager import PluginValidationError
 from ._project import ProjectSpec
