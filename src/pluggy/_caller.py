@@ -108,18 +108,16 @@ class HookCaller:
         self._normal_hookimpls = []
         self._wrapper_hookimpls = []
         self._call_history: _CallHistory | None = None
-        # TODO: Document, or make private.
         self.spec: HookSpec | None = None
         if specmodule_or_class is not None:
             assert spec_opts is not None
-            self.set_specification(specmodule_or_class, spec_opts)
+            self._set_specification(specmodule_or_class, spec_opts)
 
-    # TODO: Document, or make private.
-    def has_spec(self) -> bool:
+    def _has_spec(self) -> bool:
+        """Check if this hook caller has a specification."""
         return self.spec is not None
 
-    # TODO: Document, or make private.
-    def set_specification(
+    def _set_specification(
         self,
         specmodule_or_class: _Namespace,
         spec_opts: HookspecConfiguration,

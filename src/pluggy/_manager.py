@@ -190,7 +190,7 @@ class PluginManager:
                 if hook is None:
                     hook = HookCaller(name, self._hookexec)
                     setattr(self.hook, name, hook)
-                elif hook.has_spec():
+                elif hook._has_spec():
                     self._verify_hook(hook, hookimpl)
                     hook._maybe_apply_history(hookimpl)
                 hook._add_hookimpl(hookimpl)
@@ -311,7 +311,7 @@ class PluginManager:
                     setattr(self.hook, name, hc)
                 else:
                     # Plugins registered this hook without knowing the spec.
-                    hc.set_specification(module_or_class, spec_config)
+                    hc._set_specification(module_or_class, spec_config)
                     for hookfunction in hc.get_hookimpls():
                         self._verify_hook(hc, hookfunction)
                 names.append(name)
@@ -461,7 +461,7 @@ class PluginManager:
             if name[0] == "_":
                 continue
             hook: HookCaller = getattr(self.hook, name)
-            if not hook.has_spec():
+            if not hook._has_spec():
                 for hookimpl in hook.get_hookimpls():
                     if not hookimpl.optionalhook:
                         raise PluginValidationError(

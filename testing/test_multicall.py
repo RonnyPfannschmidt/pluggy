@@ -8,7 +8,7 @@ import pytest
 from pluggy import HookCallError
 from pluggy import HookimplMarker
 from pluggy import HookspecMarker
-from pluggy._callers import _multicall
+from pluggy._execution import _multicall
 from pluggy._hooks import HookImpl
 
 
