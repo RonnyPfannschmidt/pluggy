@@ -38,8 +38,12 @@ def test_require_await_outside_context():
     async def dummy_coro() -> int:
         return 42
 
-    with pytest.raises(RuntimeError, match="outside of async context"):
-        submitter.require_await(dummy_coro())
+    coro = dummy_coro()
+    try:
+        with pytest.raises(RuntimeError, match="outside of async context"):
+            submitter.require_await(coro)
+    finally:
+        coro.close()  # Clean up the coroutine
 
 
 def test_basic_async_support():

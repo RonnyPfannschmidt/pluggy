@@ -9,8 +9,9 @@ import pytest
 from pluggy import HookimplMarker
 from pluggy import HookspecMarker
 from pluggy import PluginManager
-from pluggy._callers import _multicall
-from pluggy._hooks import HookImpl
+from pluggy._config import HookimplConfiguration
+from pluggy._execution import _multicall
+from pluggy._implementation import HookImpl
 
 
 hookspec = HookspecMarker("example")
@@ -41,8 +42,15 @@ def test_hook_and_wrappers_speed(benchmark, hooks, wrappers) -> None:
     def setup():
         hook_name = "foo"
         hook_impls = []
-        for method in hooks + wrappers:
-            f = HookImpl(None, "<temp>", method, method.example_impl)
+        for method in hooks:
+            # Normal hooks
+            config = HookimplConfiguration()
+            f = HookImpl(None, "<temp>", method, config)
+            hook_impls.append(f)
+        for method in wrappers:
+            # Wrapper hooks
+            config = HookimplConfiguration(wrapper=True)
+            f = HookImpl(None, "<temp>", method, config)
             hook_impls.append(f)
         caller_kwargs = {"arg1": 1, "arg2": 2, "arg3": 3}
         firstresult = False
