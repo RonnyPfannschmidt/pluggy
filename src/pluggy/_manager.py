@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     # importtlib.metadata import is slow, defer it.
     import importlib.metadata
 
+    from ._project import ProjectSpec
+
 
 _BeforeTrace = Callable[[str, Sequence[HookImpl], Mapping[str, Any]], None]
 _AfterTrace = Callable[[Result[Any], str, Sequence[HookImpl], Mapping[str, Any]], None]
@@ -98,9 +100,19 @@ class PluginManager:
         The short project name. Prefer snake case. Make sure it's unique!
     """
 
-    def __init__(self, project_name: str) -> None:
+    def __init__(self, project_name: str | ProjectSpec) -> None:
+        from ._project import ProjectSpec
+
         #: The project name.
-        self.project_name: Final = project_name
+        if isinstance(project_name, ProjectSpec):
+            project_name_str = project_name.project_name
+            project_spec: ProjectSpec | None = project_name
+        else:
+            project_name_str = project_name
+            project_spec = None
+
+        self.project_name: Final = project_name_str
+        self._project_spec: Final = project_spec
         self._name2plugin: Final[dict[str, _Plugin]] = {}
         self._plugin_distinfo: Final[list[tuple[_Plugin, DistFacade]]] = []
         #: The "hook relay", used to call a hook on all registered plugins.

@@ -13,6 +13,7 @@ __all__ = [
     "Result",
     "PluggyWarning",
     "PluggyTeardownRaisedWarning",
+    "ProjectSpec",
 ]
 from ._hooks import HookCaller
 from ._hooks import HookImpl
@@ -23,6 +24,7 @@ from ._hooks import HookspecMarker
 from ._hooks import HookspecOpts
 from ._manager import PluginManager
 from ._manager import PluginValidationError
+from ._project import ProjectSpec
 from ._result import HookCallError
 from ._result import Result
 from ._warnings import PluggyTeardownRaisedWarning
