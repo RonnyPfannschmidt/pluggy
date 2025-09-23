@@ -110,7 +110,7 @@ class PluginManager:
         self.trace: Final[_tracing.TagTracerSub] = _tracing.TagTracer().get(
             "pluginmanage"
         )
-        self._inner_hookexec = _multicall
+        self._inner_hookexec: Any = _multicall
 
     def _hookexec(
         self,
@@ -121,7 +121,9 @@ class PluginManager:
     ) -> object | list[object]:
         # called from all hookcaller instances.
         # enable_tracing will set its own wrapping function at self._inner_hookexec
-        return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+        return self._inner_hookexec(  # type: ignore[no-any-return]
+            hook_name, methods, kwargs, firstresult
+        )
 
     def register(self, plugin: _Plugin, name: str | None = None) -> str | None:
         """Register a plugin and return its name.
@@ -538,7 +540,7 @@ class PluginManager:
                 lambda: oldcall(hook_name, hook_impls, caller_kwargs, firstresult)
             )
             after(outcome, hook_name, hook_impls, caller_kwargs)
-            return outcome.get_result()
+            return outcome.get_result()  # type: ignore[no-any-return]
 
         self._inner_hookexec = traced_hookexec
 
@@ -583,6 +585,45 @@ class PluginManager:
         if plugins_to_remove:
             return _SubsetHookCaller(orig, plugins_to_remove)
         return orig
+
+    async def run_async(self, func: Callable[[], Any]) -> Any:
+        """Run a function with async support using greenlets.
+
+        This method allows hook implementations to return awaitables that
+        will be automatically awaited.
+
+        :param func: A function to execute with async support.
+        :returns: The result of the function execution.
+        :raises RuntimeError: If greenlet is not installed.
+        """
+        from ._async import Submitter
+
+        submitter = Submitter()
+
+        # Create a wrapper for _inner_hookexec that integrates the submitter
+        original_hookexec = self._inner_hookexec
+
+        def async_hookexec(
+            hook_name: str,
+            methods: Sequence[HookImpl],
+            kwargs: Mapping[str, object],
+            firstresult: bool,
+        ) -> object | list[object]:
+            # Pass submitter through to _multicall
+            return original_hookexec(  # type: ignore[no-any-return]
+                hook_name,
+                methods,
+                kwargs,
+                firstresult,
+                submitter,
+            )
+
+        # Temporarily replace the hookexec
+        self._inner_hookexec = async_hookexec
+        try:
+            return await submitter.run(func)
+        finally:
+            self._inner_hookexec = original_hookexec
 
 
 def _formatdef(func: Callable[..., object]) -> str:

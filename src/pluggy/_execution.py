@@ -4,17 +4,23 @@ Multicall execution engine.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from collections.abc import Generator
 from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import cast
 from typing import NoReturn
+from typing import TYPE_CHECKING
 import warnings
 
 from ._implementation import HookImpl
 from ._result import HookCallError
 from ._result import Result
 from ._warnings import PluggyTeardownRaisedWarning
+
+
+if TYPE_CHECKING:
+    from ._async import Submitter
 
 
 # Type for generator-based hook wrappers
@@ -112,6 +118,7 @@ def _multicall(
     hook_impls: Sequence[HookImpl],
     caller_kwargs: Mapping[str, object],
     firstresult: bool,
+    submitter: Submitter | None = None,
 ) -> object | list[object]:
     """Execute a call into multiple python functions/methods and return the
     result(s).
@@ -157,6 +164,11 @@ def _multicall(
             else:
                 # Normal hook implementation
                 res = hook_impl.function(*args)
+
+                # Handle awaitables if submitter is available
+                if submitter is not None and isinstance(res, Awaitable):
+                    res = submitter.maybe_submit(res)
+
                 if res is not None:
                     results.append(res)
                     if firstresult:  # halt further impl calls
