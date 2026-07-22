@@ -64,8 +64,8 @@ def hookspec_config_from_mapping(opts: Mapping[str, Any]) -> HookspecConfigurati
         warn_on_impl_args=opts.get("warn_on_impl_args"),
     )
 
-def hookimpl_config_from_mapping(opts: Mapping[str, Any]) -> HookimplConfiguration:
-    ...
+
+def hookimpl_config_from_mapping(opts: Mapping[str, Any]) -> HookimplConfiguration: ...
 ```
 
 Do **not** keep `TypedDict` classes in `__all__`. Do not document dicts as
