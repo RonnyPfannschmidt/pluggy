@@ -3,6 +3,7 @@
 """
 
 import importlib.metadata
+import types
 from typing import Any
 from typing import cast
 
@@ -123,6 +124,216 @@ def test_set_blocked(pm: PluginManager) -> None:
     assert not pm.is_blocked("somename")
     assert not pm.unblock("somename")
     assert pm.register(A(), "somename")
+
+
+def test_register_ignores_properties(he_pm: PluginManager) -> None:
+    class ClassWithProperties:
+        property_was_executed: bool = False
+
+        @property
+        def some_func(self):
+            self.property_was_executed = True  # pragma: no cover
+
+    # Registering the class is harmless (getattr returns the property object).
+    he_pm.register(ClassWithProperties)
+    # Registering an instance must not evaluate the property getter.
+    test_plugin = ClassWithProperties()
+    he_pm.register(test_plugin)
+    assert not test_plugin.property_was_executed
+
+
+def test_register_ignores_cached_property(he_pm: PluginManager) -> None:
+    from functools import cached_property
+
+    class ClassWithCachedProperty:
+        cached_was_executed: bool = False
+
+        @cached_property
+        def some_func(self) -> None:
+            self.cached_was_executed = True  # pragma: no cover
+
+    test_plugin = ClassWithCachedProperty()
+    he_pm.register(test_plugin)
+    assert not test_plugin.cached_was_executed
+    assert "some_func" not in test_plugin.__dict__
+
+
+def test_register_ignores_raising_descriptors(he_pm: PluginManager) -> None:
+    """Descriptor attrs are skipped without accessing them via getattr."""
+
+    class RaisingDescriptor:
+        def __get__(self, obj: object, owner: type | None = None) -> object:
+            raise AttributeError("descriptor access failed")
+
+    class PluginWithRaisingDescriptor:
+        weird_attr = RaisingDescriptor()
+
+        @hookimpl
+        def he_method1(self, arg: object) -> list[object]:
+            return [arg]
+
+    plugin = PluginWithRaisingDescriptor()
+    assert "weird_attr" in dir(plugin)
+    with pytest.raises(AttributeError):
+        _ = plugin.weird_attr
+
+    he_pm.register(plugin)
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_hookimpl_above_classmethod(he_pm: PluginManager) -> None:
+    """@hookimpl applied above @classmethod is discoverable via static lookup."""
+
+    class Plugin:
+        @hookimpl
+        @classmethod
+        def he_method1(cls, arg: object) -> list[object]:
+            return [arg]
+
+    he_pm.register(Plugin())
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_hookimpl_above_staticmethod(he_pm: PluginManager) -> None:
+    """@hookimpl applied above @staticmethod is discoverable via static lookup."""
+
+    class Plugin:
+        @hookimpl
+        @staticmethod
+        def he_method1(arg: object) -> list[object]:
+            return [arg]
+
+    he_pm.register(Plugin())
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_instance_attribute_function_is_not_bound(
+    he_pm: PluginManager,
+) -> None:
+    """A function stored on the instance is called unbound, as ``getattr`` does."""
+
+    class Plugin:
+        def __init__(self) -> None:
+            @hookimpl
+            def he_method1(arg: object) -> list[object]:
+                return [arg]
+
+            # Instance attributes bypass the descriptor protocol, so no ``self``
+            # is injected and the hook must keep its declared signature.
+            self.he_method1 = he_method1
+
+    he_pm.register(Plugin())
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_instance_attribute_bound_method(he_pm: PluginManager) -> None:
+    """A bound method stored on the instance stays bound to its own object."""
+
+    class Impl:
+        @hookimpl
+        def he_method1(self, arg: object) -> list[object]:
+            return [self, arg]
+
+    impl = Impl()
+
+    class Plugin:
+        pass
+
+    plugin = Plugin()
+    plugin.he_method1 = impl.he_method1  # type: ignore[attr-defined]
+
+    he_pm.register(plugin)
+    assert he_pm.hook.he_method1(arg=1) == [[impl, 1]]
+
+
+def test_register_slot_attribute_function_is_not_bound(he_pm: PluginManager) -> None:
+    """A function stored in a ``__slots__`` slot is found and called unbound."""
+
+    class Plugin:
+        __slots__ = ("he_method1", "unset")
+
+        def __init__(self) -> None:
+            @hookimpl
+            def he_method1(arg: object) -> list[object]:
+                return [arg]
+
+            self.he_method1 = he_method1
+
+    plugin = Plugin()
+    # ``dir()`` lists ``unset`` too; an unassigned slot must be skipped quietly.
+    assert "unset" in dir(plugin)
+    he_pm.register(plugin)
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_module_level_bound_method(he_pm: PluginManager) -> None:
+    """A bound method assigned onto a module namespace is hookable."""
+
+    class Impl:
+        @hookimpl
+        def he_method1(self, arg: object) -> list[object]:
+            return [self, arg]
+
+    impl = Impl()
+    module = types.ModuleType("module_plugin")
+    module.he_method1 = impl.he_method1  # type: ignore[attr-defined]
+
+    he_pm.register(module)
+    assert he_pm.hook.he_method1(arg=1) == [[impl, 1]]
+
+
+def test_register_ignores_unmarked_class_and_static_methods(
+    he_pm: PluginManager,
+) -> None:
+    """Undecorated classmethods/staticmethods carry no marker on either side."""
+
+    class Plugin:
+        @classmethod
+        def not_a_hook_cm(cls) -> None: ...
+
+        @staticmethod
+        def not_a_hook_sm() -> None: ...
+
+        @hookimpl
+        def he_method1(self, arg: object) -> list[object]:
+            return [arg]
+
+    plugin = Plugin()
+    assert he_pm.parse_hookimpl_opts(plugin, "not_a_hook_cm") is None
+    assert he_pm.parse_hookimpl_opts(plugin, "not_a_hook_sm") is None
+
+    he_pm.register(plugin)
+    assert he_pm.hook.he_method1(arg=1) == [[1]]
+
+
+def test_register_ignores_non_callable_instance_attributes(pm: PluginManager) -> None:
+    """Instance attributes that are not routines are never hook candidates."""
+
+    class Plugin:
+        def __init__(self) -> None:
+            self.some_value = 42
+
+    assert pm.parse_hookimpl_opts(Plugin(), "some_value") is None
+
+
+def test_hookspec_lookup_ignores_properties(pm: PluginManager) -> None:
+    """Hookspec discovery must not evaluate descriptors either."""
+
+    class Spec:
+        was_executed = False
+
+        @property
+        def not_a_spec(self) -> None:
+            type(self).was_executed = True  # pragma: no cover
+
+        @hookspec
+        def he_method1(self, arg: object) -> object: ...
+
+    # Spec instances are supported at runtime, see the ``he_pm`` fixture.
+    spec = cast(Any, Spec())
+    pm.add_hookspecs(spec)
+    assert not Spec.was_executed
+    assert pm.parse_hookspec_opts(spec, "not_a_spec") is None
 
 
 def test_register_mismatch_method(he_pm: PluginManager) -> None:
@@ -893,3 +1104,6 @@ def test_get_hookcallers_no_duplicates(pm: PluginManager) -> None:
     assert len(hookcallers) == 2
     caller_names = {hc.name for hc in hookcallers}
     assert caller_names == {"hello", "goodbye"}
+    # Both hello impls are still wired up, and each caller works.
+    assert pm.hook.hello(arg=1) == [101, 2]
+    assert pm.hook.goodbye(arg=1) == [201]
