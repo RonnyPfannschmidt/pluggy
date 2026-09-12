@@ -22,7 +22,7 @@ def _try_repr_or_str(obj: object) -> str:
         return f'{type(obj).__name__}("{obj}")'
 
 
-def _format_repr_exception(exc: BaseException, obj: object, func: str) -> str:
+def _format_str_exception(exc: BaseException, obj: object) -> str:
     try:
         exc_info = _try_repr_or_str(exc)
     except (KeyboardInterrupt, SystemExit):
@@ -30,15 +30,15 @@ def _format_repr_exception(exc: BaseException, obj: object, func: str) -> str:
     except BaseException as inner:
         exc_info = f"unpresentable exception ({_try_repr_or_str(inner)})"
     name = type(obj).__name__
-    return f"<[{exc_info} raised in {func}()] {name} object at 0x{id(obj):x}>"
+    return f"<[{exc_info} raised in str()] {name} object at 0x{id(obj):x}>"
 
 
 def _escape_surrogates(text: str) -> str:
     """Escape lone surrogates so the result survives any text writer.
 
-    ``repr()`` passes surrogates through unchanged when they originate in an
-    object's own ``__repr__``, and writing such a string to a utf-8 target
-    raises :exc:`UnicodeEncodeError` inside the trace call.
+    A lone surrogate reaching the writer raises :exc:`UnicodeEncodeError`
+    inside the trace call for any utf-8 target, such as the file behind
+    pytest's ``--debug``.
     """
     if text.isascii():
         return text
@@ -46,24 +46,18 @@ def _escape_surrogates(text: str) -> str:
 
 
 def _safe_str(obj: object) -> str:
-    """``str(obj)`` for structural trace labels, guaranteed not to raise."""
+    """``str(obj)`` for tracing, guaranteed not to raise and always writable.
+
+    Tracing is a debugging aid, so it must never be the reason a hook call
+    fails, and the rendering stays ``str``-based to keep the trace output
+    readable.
+    """
     try:
         text = str(obj)
     except (KeyboardInterrupt, SystemExit):
         raise
     except BaseException as exc:
-        text = _format_repr_exception(exc, obj, "str")
-    return _escape_surrogates(text)
-
-
-def _safe_repr(obj: object) -> str:
-    """``repr(obj)`` for traced values, guaranteed not to raise."""
-    try:
-        text = repr(obj)
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except BaseException as exc:
-        text = _format_repr_exception(exc, obj, "repr")
+        text = _format_str_exception(exc, obj)
     return _escape_surrogates(text)
 
 
@@ -89,7 +83,7 @@ class TagTracer:
         lines = [f"{indent}{content} [{':'.join(tags)}]\n"]
 
         for name, value in extra.items():
-            lines.append(f"{indent}    {name}: {_safe_repr(value)}\n")
+            lines.append(f"{indent}    {name}: {_safe_str(value)}\n")
 
         return "".join(lines)
 

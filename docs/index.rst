@@ -1001,13 +1001,13 @@ Each hook call is traced with its keyword arguments, followed by a ``finish``
 line carrying the result::
 
     he_method1 [hook]
-        arg: 'value'
-        path: PosixPath('/tmp')
+        arg: value
+        path: /tmp
     finish he_method1 --> ['value'] [hook]
 
-Traced values are rendered with :func:`repr`, so their type stays visible, and
-the rendering is defensive: an object whose ``__repr__`` raises is shown as
-``<[RuntimeError(...) raised in repr()] Broken object at 0x...>``, and lone
+Values are rendered with :func:`str`, and the rendering is defensive: an object
+whose ``__str__`` raises is shown as
+``<[RuntimeError(...) raised in str()] Broken object at 0x...>``, and lone
 surrogates are backslash-escaped, so enabling tracing can never turn a working
 hook call into a failing one.
 
