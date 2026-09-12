@@ -4,7 +4,6 @@
 
 import importlib.metadata
 from typing import Any
-from typing import List
 from typing import cast
 
 import pytest
@@ -133,7 +132,6 @@ def test_register_ignores_properties(he_pm: PluginManager) -> None:
         @property
         def some_func(self):
             self.property_was_executed = True  # pragma: no cover
-            return None  # pragma: no cover
 
     # Registering the class is harmless (getattr returns the property object).
     he_pm.register(ClassWithProperties)
@@ -152,7 +150,6 @@ def test_register_ignores_cached_property(he_pm: PluginManager) -> None:
         @cached_property
         def some_func(self) -> None:
             self.cached_was_executed = True  # pragma: no cover
-            return None  # pragma: no cover
 
     test_plugin = ClassWithCachedProperty()
     he_pm.register(test_plugin)
@@ -177,7 +174,7 @@ def test_register_ignores_raising_descriptors(he_pm: PluginManager) -> None:
     plugin = PluginWithRaisingDescriptor()
     assert "weird_attr" in dir(plugin)
     with pytest.raises(AttributeError):
-        getattr(plugin, "weird_attr")
+        _ = plugin.weird_attr
 
     he_pm.register(plugin)
     assert he_pm.hook.he_method1(arg=1) == [[1]]
