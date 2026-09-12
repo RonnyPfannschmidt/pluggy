@@ -158,15 +158,14 @@ def test_dbl_plugin_tracing(pm: PluginManager) -> None:
         "  hello [hook]\n      arg: 3\n",
         "  finish hello --> [] [hook]\n",
     ]
+
+
 class BrokenRepr:
     def __repr__(self) -> str:
         raise RuntimeError("repr is broken")
 
 
 class BrokenStr:
-    def __repr__(self) -> str:
-        return "BrokenStr()"
-
     def __str__(self) -> str:
         raise RuntimeError("str is broken")
 
