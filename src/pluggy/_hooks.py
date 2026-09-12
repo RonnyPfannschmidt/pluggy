@@ -520,7 +520,10 @@ class HookCaller:
                     warnings.warn(
                         f"Argument(s) {notincall} which are declared in the hookspec "
                         "cannot be found in this hook call",
-                        stacklevel=2,
+                        # 3, not 2: the warning is raised in this helper, which
+                        # is called by __call__/call_historic/call_extra, which
+                        # are called by the code making the hook call.
+                        stacklevel=3,
                     )
                     break
 

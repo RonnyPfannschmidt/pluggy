@@ -180,6 +180,37 @@ def test_not_all_arguments_are_provided_issues_a_warning(pm: PluginManager) -> N
         pm.hook.herstory.call_historic(kwargs={})
 
 
+def test_not_all_arguments_warning_points_at_the_caller(pm: PluginManager) -> None:
+    """The warning must be attributed to the code making the hook call.
+
+    It is raised inside a helper two frames below the caller, so a stacklevel
+    that is off by one blames pluggy's own frame instead.
+    """
+
+    class Spec:
+        @hookspec
+        def hello(self, arg1, arg2):
+            pass  # pragma: no cover
+
+        @hookspec(historic=True)
+        def herstory(self, arg1, arg2):
+            pass  # pragma: no cover
+
+    pm.add_hookspecs(Spec)
+
+    with pytest.warns(UserWarning) as record:
+        pm.hook.hello(arg1=1)
+    assert record[0].filename == __file__
+
+    with pytest.warns(UserWarning) as record:
+        pm.hook.hello.call_extra([], kwargs={})
+    assert record[0].filename == __file__
+
+    with pytest.warns(UserWarning) as record:
+        pm.hook.herstory.call_historic(kwargs={})
+    assert record[0].filename == __file__
+
+
 def test_repr() -> None:
     class Plugin:
         @hookimpl
