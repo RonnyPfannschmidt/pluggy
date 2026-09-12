@@ -13,6 +13,60 @@ _Writer = Callable[[str], object]
 _Processor = Callable[[tuple[str, ...], tuple[Any, ...]], object]
 
 
+def _try_repr_or_str(obj: object) -> str:
+    try:
+        return repr(obj)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return f'{type(obj).__name__}("{obj}")'
+
+
+def _format_repr_exception(exc: BaseException, obj: object, func: str) -> str:
+    try:
+        exc_info = _try_repr_or_str(exc)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as inner:
+        exc_info = f"unpresentable exception ({_try_repr_or_str(inner)})"
+    name = type(obj).__name__
+    return f"<[{exc_info} raised in {func}()] {name} object at 0x{id(obj):x}>"
+
+
+def _escape_surrogates(text: str) -> str:
+    """Escape lone surrogates so the result survives any text writer.
+
+    ``repr()`` passes surrogates through unchanged when they originate in an
+    object's own ``__repr__``, and writing such a string to a utf-8 target
+    raises :exc:`UnicodeEncodeError` inside the trace call.
+    """
+    if text.isascii():
+        return text
+    return text.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
+def _safe_str(obj: object) -> str:
+    """``str(obj)`` for structural trace labels, guaranteed not to raise."""
+    try:
+        text = str(obj)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:
+        text = _format_repr_exception(exc, obj, "str")
+    return _escape_surrogates(text)
+
+
+def _safe_repr(obj: object) -> str:
+    """``repr(obj)`` for traced values, guaranteed not to raise."""
+    try:
+        text = repr(obj)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as exc:
+        text = _format_repr_exception(exc, obj, "repr")
+    return _escape_surrogates(text)
+
+
 class TagTracer:
     def __init__(self) -> None:
         self._tags2proc: dict[tuple[str, ...], _Processor] = {}
@@ -29,13 +83,13 @@ class TagTracer:
         else:
             extra = {}
 
-        content = " ".join(map(str, args))
+        content = " ".join(map(_safe_str, args))
         indent = "  " * self.indent
 
         lines = [f"{indent}{content} [{':'.join(tags)}]\n"]
 
         for name, value in extra.items():
-            lines.append(f"{indent}    {name}: {value}\n")
+            lines.append(f"{indent}    {name}: {_safe_repr(value)}\n")
 
         return "".join(lines)
 
