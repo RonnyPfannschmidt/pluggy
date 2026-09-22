@@ -448,13 +448,65 @@ class TestHookspecDefaultArgumentValue:
 
         assert pm.hook.hello(arg=1) == [(1, "impl-default")]
 
-    def test_does_not_override_hookimpl_default(self, pm: PluginManager) -> None:
-        """If an impl provides its own default, it takes precedence over both
-        the spec default and call value.
+    def test_call_value_overrides_hookimpl_default(self, pm: PluginManager) -> None:
+        """A call value takes precedence over an hookimpl default."""
 
-        NOTE: This is verifying existing behavior, but it's not necessarily what
-        we want (#442).
-        """
+        class Api:
+            @hookspec
+            def hello(self, arg, new_arg):
+                pass
+
+        class Plugin:
+            @hookimpl
+            def hello(self, arg, new_arg="impl-default"):
+                return new_arg
+
+        pm.add_hookspecs(Api)
+        pm.register(Plugin())
+
+        assert pm.hook.hello(arg=1, new_arg="call") == ["call"]
+
+    def test_call_value_overrides_hookimpl_default_in_wrappers(
+        self, pm: PluginManager
+    ) -> None:
+        class Api:
+            @hookspec
+            def hello(self, arg, new_arg):
+                pass
+
+        seen = []
+
+        class Plugin:
+            @hookimpl
+            def hello(self, arg, new_arg="impl-default"):
+                seen.append(new_arg)
+                return new_arg
+
+        class WrapperPlugin:
+            @hookimpl(wrapper=True)
+            def hello(self, arg, new_arg="impl-default"):
+                seen.append(new_arg)
+                result = yield
+                return result
+
+        class HookwrapperPlugin:
+            @hookimpl(hookwrapper=True)
+            def hello(self, arg, new_arg="impl-default"):
+                seen.append(new_arg)
+                yield
+
+        pm.add_hookspecs(Api)
+        pm.register(Plugin())
+        pm.register(WrapperPlugin())
+        pm.register(HookwrapperPlugin())
+
+        assert pm.hook.hello(arg=1, new_arg="call") == ["call"]
+        assert seen == ["call", "call", "call"]
+
+    def test_hookspec_default_and_call_override_hookimpl_default(
+        self, pm: PluginManager
+    ) -> None:
+        """Hookspec defaults take precedence over hookimpl defaults."""
 
         class Api:
             @hookspec
@@ -469,8 +521,8 @@ class TestHookspecDefaultArgumentValue:
         pm.add_hookspecs(Api)
         pm.register(Plugin())
 
-        assert pm.hook.hello(arg=1) == ["impl-default"]
-        assert pm.hook.hello(arg=1, new_arg="call") == ["impl-default"]
+        assert pm.hook.hello(arg=1) == ["spec-default"]
+        assert pm.hook.hello(arg=1, new_arg="call") == ["call"]
 
     def test_new_call_argument_is_not_delivered_by_old_spec(
         self, pm: PluginManager
