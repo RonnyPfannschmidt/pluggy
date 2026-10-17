@@ -29,10 +29,9 @@ def test_plugin_double_register(pm: PluginManager) -> None:
         pm.register(42, name="def")
 
 
-def test_register_rejects_none(pm: PluginManager) -> None:
-    """``None`` collides with the blocked-name sentinel and must be rejected."""
-    with pytest.raises(TypeError, match="plugin must not be None"):
-        pm.register(None)
+def test_register_ignores_none(pm: PluginManager) -> None:
+    """``None`` collides with the blocked-name sentinel and must be ignored."""
+    assert pm.register(None) is None
     assert pm.get_plugins() == set()
     assert not pm.is_registered(None)
 
@@ -369,6 +368,63 @@ def test_register_mismatch_arg(he_pm: PluginManager) -> None:
     with pytest.raises(PluginValidationError) as excinfo:
         he_pm.register(plugin)
     assert excinfo.value.plugin is plugin
+
+
+def test_register_validation_failure_leaves_no_state(he_pm: PluginManager) -> None:
+    """The invalid impl sorts last in dir(), after a valid impl and an impl
+    for an unknown hook; a failed register must install none of them (#733)."""
+
+    class hello:
+        @hookimpl
+        def a_new_hook(self):
+            pass  # pragma: no cover
+
+        @hookimpl
+        def he_method1(self, arg):
+            pass  # pragma: no cover
+
+        @hookimpl(specname="he_method1")
+        def he_method1_invalid(self, qlwkje):
+            pass  # pragma: no cover
+
+    plugin = hello()
+
+    with pytest.raises(PluginValidationError) as excinfo:
+        he_pm.register(plugin)
+    assert excinfo.value.plugin is plugin
+    assert not he_pm.is_registered(plugin)
+    assert he_pm.hook.he_method1.get_hookimpls() == []
+    assert not hasattr(he_pm.hook, "a_new_hook")
+
+
+def test_register_verifies_spec_added_by_historic_replay(pm: PluginManager) -> None:
+    """A spec added while replaying one impl's historic call must still be
+    checked for the impls registered after it."""
+
+    class Specs:
+        @hookspec(historic=True)
+        def configure(self):
+            pass  # pragma: no cover
+
+    class LateSpecs:
+        @hookspec
+        def late(self, arg):
+            pass  # pragma: no cover
+
+    pm.add_hookspecs(Specs)
+    pm.hook.configure.call_historic()
+
+    class hello:
+        @hookimpl
+        def configure(self):
+            pm.add_hookspecs(LateSpecs)
+
+        @hookimpl
+        def late(self, qlwkje):
+            pass  # pragma: no cover
+
+    with pytest.raises(PluginValidationError, match="qlwkje"):
+        pm.register(hello())
 
 
 def test_register_hookwrapper_not_a_generator_function(he_pm: PluginManager) -> None:
@@ -840,17 +896,30 @@ def test_add_hookspecs_nohooks(pm: PluginManager) -> None:
         pm.add_hookspecs(NoHooks)
 
 
+@pytest.mark.parametrize(
+    "plugin_truth", [True, False, None], ids=["truthy", "falsey", "bool-raises"]
+)
 def test_load_setuptools_instantiation(
-    monkeypatch: pytest.MonkeyPatch, pm: PluginManager
+    monkeypatch: pytest.MonkeyPatch, pm: PluginManager, plugin_truth: bool | None
 ) -> None:
+    load_calls = 0
+
     class EntryPoint:
         name = "myname"
         group = "hello"
         value = "myname:foo"
 
         def load(self):
+            nonlocal load_calls
+            load_calls += 1
+
             class PseudoPlugin:
                 x = 42
+
+                def __bool__(self) -> bool:
+                    if plugin_truth is None:
+                        raise AssertionError("Plugin truthiness must not be evaluated")
+                    return plugin_truth
 
             return PseudoPlugin()
 
@@ -869,6 +938,13 @@ def test_load_setuptools_instantiation(
     plugin = pm.get_plugin("myname")
     assert plugin is not None
     assert plugin.x == 42
+    if plugin_truth is None:
+        with pytest.raises(
+            AssertionError, match="Plugin truthiness must not be evaluated"
+        ):
+            bool(plugin)
+    else:
+        assert bool(plugin) is plugin_truth
     ret = pm.list_plugin_distinfo()
     # poor man's `assert ret == [(plugin, mock.ANY)]`
     assert len(ret) == 1
@@ -877,6 +953,7 @@ def test_load_setuptools_instantiation(
     assert ret[0][1]._dist == dist
     num = pm.load_setuptools_entrypoints("hello")
     assert num == 0  # no plugin loaded by this call
+    assert load_calls == 1
 
     ret_distributions = pm.list_plugin_distributions()
     assert ret_distributions == [(plugin, dist)]
@@ -991,7 +1068,7 @@ def test_hook_tracing_escapes_surrogate_values(pm: PluginManager) -> None:
 
     assert result == "\ud800"
     assert out == [
-        "  he_method1 [hook]\n      arg: \\ud800\n",
+        "  he_method1 [hook]\n      arg: '\\ud800'\n",
         "  finish he_method1 --> \\ud800 [hook]\n",
     ]
 
@@ -1224,3 +1301,51 @@ def test_get_hookcallers_no_duplicates(pm: PluginManager) -> None:
     # Both hello impls are still wired up, and each caller works.
     assert pm.hook.hello(arg=1) == [101, 2]
     assert pm.hook.goodbye(arg=1) == [201]
+
+
+def test_unregister_plugin_and_name_must_agree(pm: PluginManager) -> None:
+    class Plugin:
+        @hookimpl
+        def he_method1(self, arg):
+            return arg
+
+    a, b, c = Plugin(), Plugin(), Plugin()
+    pm.register(a, "a")
+    pm.register(b, "b")
+    # Both registered, but under different names.
+    with pytest.raises(ValueError, match="do not agree"):
+        pm.unregister(a, "b")
+    # Plugin not registered, name belongs to another plugin.
+    with pytest.raises(ValueError, match="do not agree"):
+        pm.unregister(c, "b")
+    # Plugin registered, name unknown.
+    with pytest.raises(ValueError, match="do not agree"):
+        pm.unregister(a, "unknown")
+    # Rejected calls leave everything untouched.
+    assert pm.get_plugin("a") is a
+    assert pm.get_plugin("b") is b
+    assert pm.hook.he_method1(arg=1) == [1, 1]
+    # Agreeing arguments still work.
+    assert pm.unregister(a, "a") is a
+    assert not pm.is_registered(a)
+
+
+def test_unregister_falsy_plugin(pm: PluginManager) -> None:
+    class FalsyPlugin:
+        def __len__(self) -> int:
+            return 0
+
+        @hookimpl
+        def he_method1(self, arg):
+            return arg
+
+    plugin = FalsyPlugin()
+    assert not plugin
+    pm.register(plugin, "falsy")
+    assert pm.hook.he_method1(arg=1) == [1]
+    assert pm.unregister(plugin) is plugin
+    assert not pm.is_registered(plugin)
+    assert pm.get_plugin("falsy") is None
+    # The name is free again.
+    pm.register(plugin, "falsy")
+    assert pm.is_registered(plugin)

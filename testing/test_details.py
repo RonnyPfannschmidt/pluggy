@@ -17,7 +17,7 @@ def test_parse_hookimpl_override() -> None:
         def parse_hookimpl_opts(self, module_or_class, name):
             opts = PluginManager.parse_hookimpl_opts(self, module_or_class, name)
             if opts is None and name.startswith("x1"):
-                opts = {}  # type: ignore[assignment]
+                return {}
             return opts
 
     class Plugin:
@@ -126,6 +126,30 @@ def test_warn_when_deprecated_args_specified(recwarn) -> None:
     assert record2.message is warning1
     assert record2.filename == Plugin.foo.__code__.co_filename
     assert record2.lineno == Plugin.foo.__code__.co_firstlineno
+
+
+def test_warn_when_deprecated_args_with_defaults_specified() -> None:
+    warning = DeprecationWarning("old is deprecated")
+
+    class Spec:
+        @hookspec(warn_on_impl_args={"old": warning})
+        def foo(self, old=None, new=None):
+            raise NotImplementedError()
+
+    class Plugin:
+        @hookimpl
+        def foo(self, old=None, new=None):
+            raise NotImplementedError()
+
+    pm = PluginManager(hookspec.project_name)
+    pm.add_hookspecs(Spec)
+
+    with pytest.warns(DeprecationWarning) as records:
+        pm.register(Plugin())
+    (record,) = records
+    assert record.message is warning
+    assert record.filename == Plugin.foo.__code__.co_filename
+    assert record.lineno == Plugin.foo.__code__.co_firstlineno
 
 
 def test_plugin_getattr_raises_errors() -> None:
@@ -309,3 +333,10 @@ def test_wrapper_runtimeerror_passtrough(pm: PluginManager) -> None:
     pm.register(Fail())
     with pytest.raises(RuntimeError, match="this is personal"):
         pm.hook.fail_late()
+
+
+def test_package_metadata_links_to_repository() -> None:
+    """The source repository is discoverable from the package metadata (#757)."""
+    urls = distribution("pluggy").metadata.get_all("Project-URL") or []
+    labels = dict(url.split(", ", 1) for url in urls)
+    assert labels["Repository"] == "https://github.com/pytest-dev/pluggy"
