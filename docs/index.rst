@@ -595,12 +595,6 @@ To allow for *hookspecs* to evolve over the lifetime of a project,
 This allows for extending hook arguments (and thus semantics) without
 breaking existing *hookimpls*.
 
-Only arguments without default values are considered for this opt-in
-matching. Arguments with defaults in a *hookimpl* are treated as optional
-keyword arguments and are not passed by pluggy, even when the hook caller
-provides a value with the same name. If a *hookimpl* needs a value from the
-hook call, declare it without a default value.
-
 In other words this is ok:
 
 .. code-block:: python
@@ -825,10 +819,13 @@ and particular plugins in it:
 
 Parsing mark options
 ^^^^^^^^^^^^^^^^^^^^
-You can retrieve the *options* applied to a particular
-*hookspec* or *hookimpl* as per :ref:`marking_hooks` using the
+Markers attach :class:`~pluggy.HookspecConfiguration` /
+:class:`~pluggy.HookimplConfiguration` objects to functions. The
 :py:meth:`~pluggy.PluginManager.parse_hookspec_opts()` and
-:py:meth:`~pluggy.PluginManager.parse_hookimpl_opts()` respectively.
+:py:meth:`~pluggy.PluginManager.parse_hookimpl_opts()` methods remain as a
+**deprecated** pytest/support concession that returns legacy dict-shaped
+options; registration only calls them when a subclass overrides them and no
+modern configuration attribute was found.
 
 
 .. _calling:
@@ -1097,17 +1094,29 @@ projects rely on it. Our Github integrated CI process runs the full
 `tox test suite`_ on each commit so be sure your changes can run on
 all required `Python interpreters`_ and ``pytest`` versions.
 
-For development, we suggest to create a virtual environment and install ``pluggy`` in
-editable mode and ``dev`` dependencies::
+For development, we suggest uv_. ``uv sync`` creates a virtual environment with
+``pluggy`` installed in editable mode and the ``dev`` and ``testing`` dependency
+groups, and ``uv run`` runs commands in it::
 
-    $ python3 -m venv .env
-    $ source .env/bin/activate
-    $ pip install -e .[dev]
+    $ uv sync
+    $ uv run pytest
+
+Without uv, pip 25.1 or later installs the same dependency groups::
+
+    $ python3 -m venv .venv
+    $ source .venv/bin/activate
+    $ pip install -e . --group dev --group testing
+
+To run the full tox_ matrix, install tox as a tool rather than into the project
+environment, because tox itself depends on ``pluggy`` and would otherwise run on
+the checkout under test::
+
+    $ uvx tox
 
 To make sure you follow the code style used in the project, install pre-commit_ which
 will run style checks before each commit::
 
-    $ pre-commit install
+    $ uv run pre-commit install
 
 
 Release Policy
@@ -1150,6 +1159,12 @@ Table of contents
     https://docs.pytest.org/en/latest/reference/plugin_list.html
 .. _pre-commit:
     https://pre-commit.com/
+
+.. _uv:
+    https://docs.astral.sh/uv/
+
+.. _tox:
+    https://tox.wiki/
 
 
 .. Indices and tables

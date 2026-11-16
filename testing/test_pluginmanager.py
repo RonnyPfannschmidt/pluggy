@@ -29,10 +29,9 @@ def test_plugin_double_register(pm: PluginManager) -> None:
         pm.register(42, name="def")
 
 
-def test_register_rejects_none(pm: PluginManager) -> None:
-    """``None`` collides with the blocked-name sentinel and must be rejected."""
-    with pytest.raises(TypeError, match="plugin must not be None"):
-        pm.register(None)
+def test_register_ignores_none(pm: PluginManager) -> None:
+    """``None`` collides with the blocked-name sentinel and must be ignored."""
+    assert pm.register(None) is None
     assert pm.get_plugins() == set()
     assert not pm.is_registered(None)
 
@@ -488,6 +487,7 @@ def test_unregister_blocked(pm: PluginManager) -> None:
     # bloked plugins can be unregistred many times atm
     pm.unregister(p, "error")
     pm.unregister(p, "error")
+    assert pm.is_blocked("error")
 
 
 def test_register_unknown_hooks(pm: PluginManager) -> None:
@@ -958,6 +958,77 @@ def test_load_setuptools_instantiation(
 
     ret_distributions = pm.list_plugin_distributions()
     assert ret_distributions == [(plugin, dist)]
+
+
+def test_unregister_drops_plugin_distribution(
+    monkeypatch: pytest.MonkeyPatch, pm: PluginManager
+) -> None:
+    class EntryPoint:
+        group = "hello"
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def load(self) -> object:
+            return type(self.name, (), {})()
+
+    class Distribution:
+        entry_points = (EntryPoint("a"), EntryPoint("b"))
+
+    dist = cast(importlib.metadata.Distribution, Distribution())
+    monkeypatch.setattr(importlib.metadata, "distributions", lambda: (dist,))
+
+    assert pm.load_setuptools_entrypoints("hello") == 2
+    b = pm.get_plugin("b")
+    pm.unregister(name="a")
+    assert pm.list_plugin_distributions() == [(b, dist)]
+    assert [p for p, _ in pm.list_plugin_distinfo()] == [b]
+
+    # reloading must not duplicate the remaining entry
+    assert pm.load_setuptools_entrypoints("hello") == 1
+    a = pm.get_plugin("a")
+    assert pm.list_plugin_distributions() == [(b, dist), (a, dist)]
+
+    pm.set_blocked("b")
+    assert pm.list_plugin_distributions() == [(a, dist)]
+
+
+def test_load_setuptools_ignores_declined_plugins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class EntryPoint:
+        group = "hello"
+
+        def __init__(self, name: str, plugin: object) -> None:
+            self.name = name
+            self.plugin = plugin
+
+        def load(self) -> object:
+            return self.plugin
+
+    accepted = object()
+
+    class Distribution:
+        entry_points = (
+            EntryPoint("none-plugin", None),
+            EntryPoint("declined", object()),
+            EntryPoint("renamed", accepted),
+        )
+
+    class DecliningPluginManager(PluginManager):
+        def register(self, plugin: object, name: str | None = None) -> str | None:
+            if name == "declined":
+                return None
+            if name == "renamed":
+                name = "accepted"
+            return super().register(plugin, name)
+
+    dist = cast(importlib.metadata.Distribution, Distribution())
+    monkeypatch.setattr(importlib.metadata, "distributions", lambda: (dist,))
+    pm = DecliningPluginManager("example")
+
+    assert pm.load_setuptools_entrypoints("hello") == 1
+    assert pm.list_plugin_distributions() == [(accepted, dist)]
 
 
 def test_add_tracefuncs(he_pm: PluginManager) -> None:
